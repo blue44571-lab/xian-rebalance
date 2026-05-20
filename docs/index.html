@@ -344,6 +344,17 @@
     <div class="rebal-box" id="rebal-detail"></div>
   </div>
 
+  <!-- 每日投資紀錄 -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">每日投資紀錄</div>
+      <span style="font-size:0.72rem;color:var(--muted)" id="records-count"></span>
+    </div>
+    <div id="records-list">
+      <div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">載入中…</div>
+    </div>
+  </div>
+
   <div class="footer" id="footer"></div>
 </div>
 
@@ -689,6 +700,72 @@ function recalcAndRender() {
 }
 
 /* ════════════════════════════════════════
+   每日投資紀錄
+════════════════════════════════════════ */
+async function loadRecords() {
+  try {
+    const r = await fetch("data/records.json?t=" + Date.now());
+    const d = await r.json();
+    renderRecords(d.records || []);
+  } catch {
+    document.getElementById("records-list").innerHTML =
+      '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">尚無紀錄</div>';
+  }
+}
+
+function renderRecords(records) {
+  const el = document.getElementById("records-list");
+  if (!records.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">收盤後自動記錄，明日起可查閱</div>';
+    return;
+  }
+
+  document.getElementById("records-count").textContent = `共 ${records.length} 筆`;
+
+  // 最新在上
+  const rev = [...records].reverse();
+  let rows = "";
+  for (let i = 0; i < rev.length; i++) {
+    const rec  = rev[i];
+    const prev = rev[i + 1];                   // 前一個（較舊）
+    const isLast = i === rev.length - 1;
+
+    let changeHtml = '<span style="color:var(--muted);font-size:0.75rem">—</span>';
+    if (prev && prev.total > 0) {
+      const chg    = rec.total - prev.total;
+      const pct    = (chg / prev.total * 100).toFixed(2);
+      const sign   = chg >= 0 ? "+" : "";
+      const color  = chg >= 0 ? "var(--green)" : "var(--red)";
+      const arrow  = chg >= 0 ? "▲" : "▼";
+      changeHtml   = `<span style="color:${color};font-size:0.78rem">${arrow} ${sign}${fmt(chg)}（${sign}${pct}%）</span>`;
+    }
+
+    const adjLabel = rec.adjustment > 0 ? `需買進 ${fmt(rec.adjustment)}`
+                   : rec.adjustment < 0 ? `需賣出 ${fmt(Math.abs(rec.adjustment))}`
+                   : "已平衡";
+    const adjColor = rec.adjustment > 0 ? "var(--green)" : rec.adjustment < 0 ? "var(--red)" : "var(--muted)";
+
+    rows += `
+      <div style="padding:10px 0;${isLast ? "" : "border-bottom:1px solid var(--border)"}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.88rem">${rec.date}</div>
+            <div style="color:var(--muted);font-size:0.73rem;margin-top:3px;line-height:1.6">
+              正二 ${rec.stock_pct}% / 現金 ${rec.cash_pct}% ｜ @$${rec.price.toFixed(2)} ｜ Beta ${rec.beta}
+            </div>
+            <div style="color:${adjColor};font-size:0.73rem;margin-top:1px">${adjLabel}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-weight:700;font-size:0.95rem">${fmt(rec.total)}</div>
+            <div style="margin-top:3px">${changeHtml}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = rows;
+}
+
+/* ════════════════════════════════════════
    啟動
 ════════════════════════════════════════ */
 async function boot() {
@@ -698,7 +775,7 @@ async function boot() {
   fillSettingsUI(settings);
   restoreCachedPrice();  // 先顯示快取，不讓畫面空白
   recalcAndRender();
-  await fetchPrice();    // 再背景抓最新
+  await Promise.all([fetchPrice(), loadRecords()]);
   recalcAndRender();
   // 每 60 秒自動更新報價（盤中期間有意義）
   setInterval(async () => {
