@@ -1,0 +1,28 @@
+# =============================================
+#  投資組合再平衡監控設定
+#  修改 shares / cash_twd 即可更新持倉
+# =============================================
+
+portfolio:
+  positions:
+    - ticker: "00631L.TW"
+      name: "台灣50正2（00631L）"
+      shares: 1000          # ← 持有股數，隨時修改
+      beta: 2.0
+
+  cash_twd: 200000          # ← 目前現金台幣總額，隨時修改
+
+rebalancing:
+  target_beta: 1.2          # 目標 Portfolio Beta
+  deviation_threshold: 0.10 # 偏離 ±10% 時觸發（可調整）
+
+monitoring:
+  interval_minutes: 15
+  market_open: "09:00"
+  market_close: "13:30"
+  timezone: "Asia/Taipei"
+  daily_report_time: "13:45"
+
+dashboard:
+  # 用 Python 產生：hashlib.sha256("你的密碼".encode()).hexdigest()
+  password_hash: "REPLACE_WITH_YOUR_SHA256_HASH"

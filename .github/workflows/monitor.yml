@@ -1,0 +1,40 @@
+name: 盤中再平衡監控
+
+on:
+  schedule:
+    # 台灣時間 09:00–13:30（UTC 01:00–05:30），每 15 分鐘，週一到週五
+    - cron: "0,15,30,45 1,2,3,4 * * 1-5"
+    - cron: "0,15,30 5 * * 1-5"
+  workflow_dispatch:  # 允許手動觸發
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 安裝相依套件
+        run: pip install -r requirements.txt
+
+      - name: 執行監控
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py --mode monitor
+
+      - name: 更新 Dashboard 狀態
+        run: |
+          git config user.name "rebalance-bot"
+          git config user.email "bot@github.com"
+          git add docs/data/state.json
+          git diff --staged --quiet || git commit -m "chore: update portfolio state"
+          git push

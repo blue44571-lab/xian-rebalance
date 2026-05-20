@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>再平衡監控 Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --blue: #58a6ff;
+      --accent: #1f6feb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    /* ── 密碼保護 ── */
+    #auth-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .auth-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 36px 28px;
+      width: min(360px, 90vw);
+      text-align: center;
+    }
+    .auth-box h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    .auth-box p  { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
+    .auth-box input {
+      width: 100%; padding: 12px 14px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-size: 1rem; margin-bottom: 12px;
+    }
+    .auth-box input:focus { outline: none; border-color: var(--accent); }
+    .auth-box button {
+      width: 100%; padding: 12px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; cursor: pointer; font-weight: 600;
+    }
+    .auth-box button:hover { background: #388bfd; }
+    .auth-error { color: var(--red); font-size: 0.85rem; margin-top: 10px; min-height: 20px; }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; max-width: 480px; margin: 0 auto; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    header h1 { font-size: 1.15rem; font-weight: 700; }
+    .refresh-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); padding: 6px 12px;
+      border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+    }
+    .refresh-btn:hover { color: var(--text); border-color: var(--text); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 0.78rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em;
+      margin-bottom: 12px;
+    }
+
+    /* 總資產 */
+    .total-value { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+    .total-sub   { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+
+    /* 持倉列表 */
+    .position-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .position-row:last-child { border-bottom: none; }
+    .pos-left .pos-name  { font-weight: 600; font-size: 0.95rem; }
+    .pos-left .pos-sub   { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .pos-right { text-align: right; }
+    .pos-right .pos-value { font-weight: 600; }
+    .pos-right .pos-weight { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+
+    /* Beta 區塊 */
+    .beta-numbers {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 14px;
+    }
+    .beta-current { font-size: 2.2rem; font-weight: 700; }
+    .beta-meta    { text-align: right; color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+    .beta-meta span { display: block; }
+
+    /* Beta 量表（長條） */
+    .gauge-track {
+      position: relative; height: 10px; border-radius: 5px;
+      background: linear-gradient(to right, var(--green) 0%, var(--yellow) 45%, var(--red) 100%);
+      margin-bottom: 6px;
+    }
+    .gauge-range {
+      position: absolute; top: 0; height: 10px;
+      background: rgba(255,255,255,0.18); border-radius: 5px;
+    }
+    .gauge-needle {
+      position: absolute; top: -4px;
+      width: 4px; height: 18px;
+      background: #fff; border-radius: 2px;
+      transform: translateX(-50%);
+      transition: left 0.4s ease;
+    }
+    .gauge-labels {
+      display: flex; justify-content: space-between;
+      color: var(--muted); font-size: 0.72rem;
+    }
+
+    /* 再平衡狀態 */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600; margin-bottom: 10px;
+    }
+    .status-normal { background: rgba(63,185,80,0.15); color: var(--green); }
+    .status-sell   { background: rgba(248,81,73,0.15);  color: var(--red); }
+    .status-buy    { background: rgba(63,185,80,0.15);  color: var(--green); }
+
+    .rebalance-detail {
+      background: var(--bg); border-radius: 8px;
+      padding: 12px 14px; font-size: 0.88rem; line-height: 1.8;
+    }
+    .rebalance-detail .label { color: var(--muted); }
+    .rebalance-detail .value { font-weight: 600; }
+
+    .last-updated {
+      text-align: center; color: var(--muted);
+      font-size: 0.75rem; margin-top: 20px; margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ 密碼保護 ══ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <h2>🔒 再平衡監控</h2>
+    <p>請輸入密碼以進入 Dashboard</p>
+    <input type="password" id="pwd-input" placeholder="密碼" autocomplete="current-password" />
+    <button onclick="checkPassword()">進入</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- ══ 主 Dashboard ══ -->
+<div id="dashboard">
+  <header>
+    <h1>📊 再平衡監控</h1>
+    <button class="refresh-btn" onclick="loadData()">↺ 重新整理</button>
+  </header>
+
+  <!-- 總資產 -->
+  <div class="card">
+    <div class="card-title">總資產</div>
+    <div class="total-value" id="total-value">—</div>
+    <div class="total-sub" id="last-price-time"></div>
+  </div>
+
+  <!-- 持倉 -->
+  <div class="card">
+    <div class="card-title">持倉配置</div>
+    <div id="positions-list"></div>
+  </div>
+
+  <!-- Portfolio Beta -->
+  <div class="card">
+    <div class="card-title">Portfolio Beta</div>
+    <div class="beta-numbers">
+      <div class="beta-current" id="beta-current">—</div>
+      <div class="beta-meta">
+        <span>目標 <b id="beta-target">—</b></span>
+        <span>偏離 <b id="beta-deviation">—</b></span>
+        <span>區間 <b id="beta-range">—</b></span>
+      </div>
+    </div>
+    <div class="gauge-track">
+      <div class="gauge-range" id="gauge-range"></div>
+      <div class="gauge-needle" id="gauge-needle"></div>
+    </div>
+    <div class="gauge-labels">
+      <span id="g-min">0.8</span>
+      <span>目標</span>
+      <span id="g-max">1.6</span>
+    </div>
+  </div>
+
+  <!-- 再平衡建議 -->
+  <div class="card">
+    <div class="card-title">再平衡狀態</div>
+    <div id="status-badge-wrap"></div>
+    <div class="rebalance-detail" id="rebalance-detail"></div>
+  </div>
+
+  <div class="last-updated" id="last-updated"></div>
+</div>
+
+<script>
+  // ── 密碼設定（將下方 HASH 換成你自己的 SHA-256 雜湊值） ──
+  // 產生方式：python3 -c "import hashlib; print(hashlib.sha256('你的密碼'.encode()).hexdigest())"
+  const PASSWORD_HASH = "52f2aabb94542cae2d424b73665c3c2af06771ad84bdff07fcc25732825502be";
+  const SESSION_KEY = "xian_rebalance_auth";
+
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function checkPassword() {
+    const pwd = document.getElementById("pwd-input").value;
+    const hash = await sha256(pwd);
+    if (hash === PASSWORD_HASH) {
+      sessionStorage.setItem(SESSION_KEY, "1");
+      document.getElementById("auth-overlay").style.display = "none";
+      document.getElementById("dashboard").style.display = "block";
+      loadData();
+    } else {
+      document.getElementById("auth-error").textContent = "密碼錯誤，請再試一次。";
+    }
+  }
+
+  document.getElementById("pwd-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") checkPassword();
+  });
+
+  if (sessionStorage.getItem(SESSION_KEY) === "1") {
+    document.getElementById("auth-overlay").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+  }
+
+  // ── 讀取狀態 JSON ──
+  async function loadData() {
+    try {
+      const res = await fetch("data/state.json?t=" + Date.now());
+      if (!res.ok) throw new Error("無法讀取狀態檔");
+      const d = await res.json();
+      render(d);
+    } catch (e) {
+      document.getElementById("last-updated").textContent = "讀取失敗：" + e.message;
+    }
+  }
+
+  function fmt(v) {
+    return "$" + Math.round(v).toLocaleString("zh-TW");
+  }
+
+  function render(d) {
+    const p = d.portfolio;
+    const b = d.beta;
+    const r = d.rebalancing;
+
+    // 總資產
+    document.getElementById("total-value").textContent = fmt(p.total_value);
+
+    // 持倉
+    let posHtml = "";
+    for (const pos of p.positions) {
+      posHtml += `
+        <div class="position-row">
+          <div class="pos-left">
+            <div class="pos-name">${pos.name}</div>
+            <div class="pos-sub">${pos.shares.toLocaleString()} 股 × $${pos.price.toFixed(2)}</div>
+          </div>
+          <div class="pos-right">
+            <div class="pos-value">${fmt(pos.value)}</div>
+            <div class="pos-weight">${(pos.weight * 100).toFixed(1)}%</div>
+          </div>
+        </div>`;
+    }
+    posHtml += `
+      <div class="position-row">
+        <div class="pos-left">
+          <div class="pos-name">現金</div>
+          <div class="pos-sub">台幣存款</div>
+        </div>
+        <div class="pos-right">
+          <div class="pos-value">${fmt(p.cash_twd)}</div>
+          <div class="pos-weight">${(p.cash_weight * 100).toFixed(1)}%</div>
+        </div>
+      </div>`;
+    document.getElementById("positions-list").innerHTML = posHtml;
+
+    // Beta
+    const betaColor = b.status === "sell" ? "#f85149" : b.status === "buy" ? "#3fb950" : "#e6edf3";
+    document.getElementById("beta-current").style.color = betaColor;
+    document.getElementById("beta-current").textContent = b.current.toFixed(3);
+    document.getElementById("beta-target").textContent = b.target;
+    document.getElementById("beta-deviation").textContent = (b.deviation_pct >= 0 ? "+" : "") + b.deviation_pct.toFixed(2) + "%";
+    document.getElementById("beta-range").textContent = `${b.lower_limit} ～ ${b.upper_limit}`;
+
+    // 量表（假設顯示範圍 0.8 到 1.6）
+    const gMin = b.target * 0.67, gMax = b.target * 1.33;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const pct = v => ((clamp(v, gMin, gMax) - gMin) / (gMax - gMin) * 100).toFixed(1) + "%";
+
+    document.getElementById("g-min").textContent = gMin.toFixed(2);
+    document.getElementById("g-max").textContent = gMax.toFixed(2);
+
+    const rangeEl = document.getElementById("gauge-range");
+    const loPct = ((b.lower_limit - gMin) / (gMax - gMin) * 100).toFixed(1);
+    const hiPct = ((b.upper_limit - gMin) / (gMax - gMin) * 100).toFixed(1);
+    rangeEl.style.left = loPct + "%";
+    rangeEl.style.width = (hiPct - loPct) + "%";
+
+    document.getElementById("gauge-needle").style.left = pct(b.current);
+
+    // 再平衡
+    const statusMap = {
+      normal: ["status-normal", "✅ 正常，無需操作"],
+      sell:   ["status-sell",   "🔴 觸發！建議賣出"],
+      buy:    ["status-buy",    "🟢 觸發！建議買進"],
+    };
+    const [cls, label] = statusMap[b.status] || statusMap.normal;
+    document.getElementById("status-badge-wrap").innerHTML =
+      `<div class="status-badge ${cls}">${label}</div>`;
+
+    let detail = "";
+    if (r.triggered) {
+      const verb = r.action === "SELL" ? "賣出" : "買進";
+      detail = `
+        <div><span class="label">建議動作：</span><span class="value">${verb} 00631L</span></div>
+        <div><span class="label">建議金額：</span><span class="value">${fmt(r.amount_twd)} TWD</span></div>
+        <div><span class="label">約需股數：</span><span class="value">${(r.shares_estimate || 0).toLocaleString()} 股</span></div>
+        <div><span class="label">執行後 Beta：</span><span class="value">${b.target}</span></div>`;
+    } else {
+      detail = `<div style="color:var(--muted)">Beta 在目標區間內（${b.lower_limit} ～ ${b.upper_limit}），持倉維持不動。</div>`;
+    }
+    document.getElementById("rebalance-detail").innerHTML = detail;
+
+    // 更新時間
+    const dt = new Date(d.last_updated);
+    document.getElementById("last-updated").textContent =
+      "最後更新：" + dt.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+  }
+
+  // 每 60 秒自動重整
+  if (sessionStorage.getItem(SESSION_KEY) === "1") {
+    loadData();
+    setInterval(loadData, 60000);
+  }
+</script>
+</body>
+</html>
