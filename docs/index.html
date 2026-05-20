@@ -270,8 +270,8 @@
         <input type="number" id="s-beta" min="0.1" max="5" step="0.1" />
       </div>
       <div class="field">
-        <label>目標 Beta</label>
-        <input type="number" id="s-target" min="0.1" max="5" step="0.1" />
+        <label>目標配置比例（%）</label>
+        <input type="number" id="s-alloc" min="1" max="99" step="1" />
       </div>
       <div class="field" style="grid-column:1/-1">
         <label>偏離閾值（±%，如 10 表示 ±10%）</label>
@@ -373,7 +373,7 @@ document.getElementById("pwd-input").addEventListener("keydown", e => { if (e.ke
    設定（localStorage）
 ════════════════════════════════════════ */
 const SETTINGS_KEY = "xian_portfolio";
-const DEFAULTS = { shares: 1000, cashTwd: 200000, stockBeta: 2.0, targetBeta: 1.2, threshold: 10 };
+const DEFAULTS = { shares: 1000, cashTwd: 200000, stockBeta: 2.0, targetAllocation: 60, threshold: 10 };
 
 function loadSettings() {
   try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); }
@@ -381,11 +381,11 @@ function loadSettings() {
 }
 function saveSettings() {
   const s = {
-    shares:    parseFloat(document.getElementById("s-shares").value)    || DEFAULTS.shares,
-    cashTwd:   parseFloat(document.getElementById("s-cash").value)      || DEFAULTS.cashTwd,
-    stockBeta: parseFloat(document.getElementById("s-beta").value)      || DEFAULTS.stockBeta,
-    targetBeta:parseFloat(document.getElementById("s-target").value)    || DEFAULTS.targetBeta,
-    threshold: parseFloat(document.getElementById("s-threshold").value) || DEFAULTS.threshold,
+    shares:          parseFloat(document.getElementById("s-shares").value)    || DEFAULTS.shares,
+    cashTwd:         parseFloat(document.getElementById("s-cash").value)      || DEFAULTS.cashTwd,
+    stockBeta:       parseFloat(document.getElementById("s-beta").value)      || DEFAULTS.stockBeta,
+    targetAllocation:parseFloat(document.getElementById("s-alloc").value)     || DEFAULTS.targetAllocation,
+    threshold:       parseFloat(document.getElementById("s-threshold").value) || DEFAULTS.threshold,
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   settings = s;
@@ -398,7 +398,7 @@ function fillSettingsUI(s) {
   document.getElementById("s-shares").value    = s.shares;
   document.getElementById("s-cash").value      = s.cashTwd;
   document.getElementById("s-beta").value      = s.stockBeta;
-  document.getElementById("s-target").value    = s.targetBeta;
+  document.getElementById("s-alloc").value     = s.targetAllocation ?? DEFAULTS.targetAllocation;
   document.getElementById("s-threshold").value = s.threshold;
 }
 
@@ -546,23 +546,29 @@ function calcPortfolio(shares, cashTwd, price, stockBeta) {
            beta: parseFloat((sw * stockBeta).toFixed(4)) };
 }
 
-function calcRebalance(portfolio, targetBeta, thresholdPct, price, stockBeta) {
-  const threshold = thresholdPct / 100;
-  const upper = parseFloat((targetBeta * (1 + threshold)).toFixed(4));
-  const lower = parseFloat((targetBeta * (1 - threshold)).toFixed(4));
-  const dev   = parseFloat(((portfolio.beta - targetBeta) / targetBeta * 100).toFixed(2));
-  let action = null, amount = 0, shares = 0;
-  const status = portfolio.beta > upper ? "sell" : portfolio.beta < lower ? "buy" : "normal";
-  if (status === "sell") {
-    action = "SELL";
-    amount = Math.round(portfolio.total * (portfolio.beta - targetBeta) / stockBeta);
-    shares = price > 0 ? Math.round(amount / price) : 0;
-  } else if (status === "buy") {
-    action = "BUY";
-    amount = Math.round(portfolio.total * (targetBeta - portfolio.beta) / stockBeta);
-    shares = price > 0 ? Math.round(amount / price) : 0;
-  }
-  return { upper, lower, dev, status, action, amount, shares };
+function calcRebalance(portfolio, targetAllocation, thresholdPct, price) {
+  const targetAlloc    = targetAllocation / 100;
+  const targetStockAmt = Math.round(portfolio.total * targetAlloc);  // Step 2
+  const adjustment     = Math.round(targetStockAmt - portfolio.stockValue); // Step 3 (+ 買進 / - 賣出)
+  const adjShares      = price > 0 ? Math.round(Math.abs(adjustment) / price) : 0;
+
+  const currentAlloc = portfolio.stockWeight;
+  const threshold    = thresholdPct / 100;
+  const upper        = parseFloat((targetAlloc * (1 + threshold)).toFixed(4));
+  const lower        = parseFloat((targetAlloc * (1 - threshold)).toFixed(4));
+  const devPct       = targetAlloc > 0
+    ? parseFloat(((currentAlloc - targetAlloc) / targetAlloc * 100).toFixed(2))
+    : 0;
+  const status = currentAlloc > upper ? "sell" : currentAlloc < lower ? "buy" : "normal";
+
+  return {
+    targetAlloc, targetStockAmt,
+    currentStockValue: Math.round(portfolio.stockValue),
+    adjustment, adjShares,
+    status,
+    action: status === "sell" ? "SELL" : status === "buy" ? "BUY" : null,
+    devPct, currentAlloc, upper, lower,
+  };
 }
 
 /* ════════════════════════════════════════
@@ -590,7 +596,8 @@ function recalcAndRender() {
   const isSim     = simPct !== 0;
   const usePrice  = isSim ? simPrice : currentPrice;
   const portfolio = calcPortfolio(settings.shares, settings.cashTwd, usePrice, settings.stockBeta);
-  const rebal     = calcRebalance(portfolio, settings.targetBeta, settings.threshold, usePrice, settings.stockBeta);
+  const rebal     = calcRebalance(portfolio, settings.targetAllocation ?? DEFAULTS.targetAllocation, settings.threshold, usePrice);
+  const targetBeta = parseFloat(((settings.targetAllocation ?? DEFAULTS.targetAllocation) / 100 * settings.stockBeta).toFixed(4));
 
   // 模擬器 UI
   document.getElementById("sim-price").textContent = `$${simPrice.toFixed(2)}`;
@@ -614,48 +621,67 @@ function recalcAndRender() {
     </div>`;
   document.getElementById("total-value").textContent = fmt(portfolio.total);
 
-  // Beta
+  // Beta 量表（顯示範圍：targetBeta ±33%）
   const betaColor = rebal.status === "sell" ? "var(--red)" : rebal.status === "buy" ? "var(--green)" : "var(--text)";
   const betaEl = document.getElementById("beta-current");
   betaEl.textContent = portfolio.beta.toFixed(3);
   betaEl.style.color = betaColor;
-  document.getElementById("beta-target").textContent    = settings.targetBeta;
-  document.getElementById("beta-deviation").textContent = (rebal.dev >= 0 ? "+" : "") + rebal.dev.toFixed(2) + "%";
-  document.getElementById("beta-range").textContent     = `${rebal.lower} ～ ${rebal.upper}`;
+  document.getElementById("beta-target").textContent    = targetBeta;
+  document.getElementById("beta-deviation").textContent = (rebal.devPct >= 0 ? "+" : "") + rebal.devPct.toFixed(2) + "% 配置";
+  document.getElementById("beta-range").textContent     = `${(rebal.lower*100).toFixed(0)}%～${(rebal.upper*100).toFixed(0)}% 正二`;
 
-  // 量表（顯示範圍：targetBeta ±33%）
-  const gMin = parseFloat((settings.targetBeta * 0.67).toFixed(2));
-  const gMax = parseFloat((settings.targetBeta * 1.33).toFixed(2));
+  const gMin = parseFloat((targetBeta * 0.67).toFixed(2));
+  const gMax = parseFloat((targetBeta * 1.33).toFixed(2));
   const toPct = v => Math.max(0, Math.min(100, (v - gMin) / (gMax - gMin) * 100));
   document.getElementById("g-lo").textContent = gMin;
   document.getElementById("g-hi").textContent = gMax;
-  const loPct = toPct(rebal.lower), hiPct = toPct(rebal.upper);
-  document.getElementById("gauge-safe").style.left  = loPct + "%";
-  document.getElementById("gauge-safe").style.width = (hiPct - loPct) + "%";
+  document.getElementById("gauge-safe").style.left  = toPct(rebal.lower * settings.stockBeta) + "%";
+  document.getElementById("gauge-safe").style.width = (toPct(rebal.upper * settings.stockBeta) - toPct(rebal.lower * settings.stockBeta)) + "%";
   document.getElementById("gauge-needle").style.left = toPct(portfolio.beta) + "%";
 
-  // 再平衡
+  // 再平衡建議（三步驟，永遠顯示）
   const badgeMap = {
-    normal: ["s-normal", "✅ 正常，無需操作"],
-    sell:   ["s-sell",   "🔴 觸發！Beta 過高，建議賣出"],
-    buy:    ["s-buy",    "🟢 觸發！Beta 過低，建議買進"],
+    normal: ["s-normal", "✅ 配置正常，無需操作"],
+    sell:   ["s-sell",   "🔴 觸發！正二比例過高，建議賣出"],
+    buy:    ["s-buy",    "🟢 觸發！正二比例過低，建議買進"],
   };
   const [bcls, blabel] = badgeMap[rebal.status];
   document.getElementById("status-badge-wrap").innerHTML =
     `<div class="status-badge ${bcls}">${blabel}</div>`;
 
-  let detail;
-  if (rebal.action) {
-    const verb = rebal.action === "SELL" ? "賣出" : "買進";
-    detail = `
-      <div><span class="lbl">建議動作</span>：<span class="val">${verb} 00631L</span></div>
-      <div><span class="lbl">建議金額</span>：<span class="val">${fmt(rebal.amount)} TWD</span></div>
-      <div><span class="lbl">約需股數</span>：<span class="val">${rebal.shares.toLocaleString()} 股</span></div>
-      <div><span class="lbl">執行後 Beta</span>：<span class="val">${settings.targetBeta}</span></div>`;
-  } else {
-    detail = `<div style="color:var(--muted)">Beta 在目標區間（${rebal.lower} ～ ${rebal.upper}）內，持倉維持不動。</div>`;
-  }
-  document.getElementById("rebal-detail").innerHTML = detail;
+  const targetPct = (settings.targetAllocation ?? 60).toFixed(0);
+  const cashPct   = (100 - parseFloat(targetPct)).toFixed(0);
+  const adjSign   = rebal.adjustment >= 0 ? "+" : "−";
+  const adjColor  = rebal.adjustment > 0 ? "var(--green)" : rebal.adjustment < 0 ? "var(--red)" : "var(--text)";
+  const adjLabel  = rebal.adjustment > 0 ? "（需買進）" : rebal.adjustment < 0 ? "（需賣出）" : "（已平衡）";
+  const adjVerb   = rebal.adjustment > 0 ? "買進" : "賣出";
+
+  document.getElementById("rebal-detail").innerHTML = `
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span class="lbl">Step 1　總資產</span>
+      <span class="val">${fmt(portfolio.total)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span class="lbl">Step 2　目標正二金額（${targetPct}%）</span>
+      <span class="val">${fmt(rebal.targetStockAmt)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span class="lbl">　　　　目前正二市值（${(rebal.currentAlloc*100).toFixed(1)}%）</span>
+      <span class="val">${fmt(rebal.currentStockValue)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:1rem">
+      <span class="lbl"><b>Step 3　調整金額</b>${adjLabel}</span>
+      <span style="font-weight:700;color:${adjColor}">${adjSign}${fmt(Math.abs(rebal.adjustment))}</span>
+    </div>
+    ${rebal.action ? `
+    <div style="background:var(--card);border-radius:8px;padding:10px 12px;margin-top:4px;font-size:0.85rem;line-height:1.9;border:1px solid var(--border)">
+      <div>建議 <b>${adjVerb}</b> 00631L 約 <b>${rebal.adjShares.toLocaleString()} 股</b>（@$${usePrice.toFixed(2)}）</div>
+      <div style="color:var(--muted)">執行後：${targetPct}% 正二 / ${cashPct}% 現金</div>
+    </div>` : `
+    <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">
+      偏離未超過 ±${settings.threshold}%，Telegram 不觸發通知
+    </div>`}
+  `;
 
   // 頁底
   const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });

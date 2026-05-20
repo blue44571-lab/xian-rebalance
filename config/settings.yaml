@@ -13,7 +13,7 @@ portfolio:
   cash_twd: 200000          # ← 目前現金台幣總額，隨時修改
 
 rebalancing:
-  target_beta: 1.2          # 目標 Portfolio Beta
+  target_allocation: 0.60   # 目標股票配置比例（60%）
   deviation_threshold: 0.10 # 偏離 ±10% 時觸發（可調整）
 
 monitoring:

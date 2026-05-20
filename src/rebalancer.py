@@ -3,55 +3,54 @@ from typing import Any
 
 def check_rebalance(portfolio: dict[str, Any], config: dict) -> dict[str, Any]:
     """
-    判斷是否需要再平衡，並計算精確的買賣金額（台幣）。
-
-    再平衡公式：
-      目標股票市值 = target_beta × 總資產 / 股票Beta
-      買賣金額     = 目前股票市值 - 目標股票市值
+    配置比例再平衡計算（三步驟）：
+      Step 1：總資產 = 正二市值 + 現金
+      Step 2：目標正二金額 = 總資產 × 目標配置比例
+      Step 3：調整金額 = 目標正二金額 - 目前正二市值
+              正值 → 買進；負值 → 賣出
     """
-    target_beta = config["rebalancing"]["target_beta"]
-    threshold = config["rebalancing"]["deviation_threshold"]
-    current_beta = portfolio["portfolio_beta"]
-    total_value = portfolio["total_value"]
+    target_alloc = config["rebalancing"]["target_allocation"]      # e.g., 0.60
+    threshold    = config["rebalancing"]["deviation_threshold"]    # e.g., 0.10
 
-    upper_limit = round(target_beta * (1 + threshold), 4)
-    lower_limit = round(target_beta * (1 - threshold), 4)
-    deviation_pct = round((current_beta - target_beta) / target_beta * 100, 2)
+    total_value  = portfolio["total_value"]
+    stock_value  = portfolio["total_stock_value"]
 
-    result = {
-        "current_beta": current_beta,
-        "target_beta": target_beta,
-        "upper_limit": upper_limit,
-        "lower_limit": lower_limit,
-        "deviation_pct": deviation_pct,
-        "triggered": False,
-        "action": None,
-        "amount_twd": 0,
-        "status": "normal",
+    target_stock = total_value * target_alloc
+    adjustment   = target_stock - stock_value   # + = 買進, - = 賣出
+
+    current_alloc = stock_value / total_value if total_value > 0 else 0
+    upper = target_alloc * (1 + threshold)
+    lower = target_alloc * (1 - threshold)
+    dev_pct = round((current_alloc - target_alloc) / target_alloc * 100, 2) if target_alloc > 0 else 0
+
+    status = "sell" if current_alloc > upper else "buy" if current_alloc < lower else "normal"
+    action = "SELL" if status == "sell" else "BUY" if status == "buy" else None
+
+    shares_estimate = 0
+    if action and portfolio["positions"]:
+        price = portfolio["positions"][0]["price"]
+        if price > 0:
+            shares_estimate = round(abs(adjustment) / price)
+
+    # Beta 資訊（供顯示用）
+    portfolio_beta = portfolio["portfolio_beta"]
+    stock_beta = portfolio["positions"][0]["beta"] if portfolio["positions"] else 2.0
+    target_beta = round(target_alloc * stock_beta, 4)
+
+    return {
+        "target_alloc":     round(target_alloc, 4),
+        "target_stock":     round(target_stock),
+        "current_stock":    round(stock_value),
+        "adjustment":       round(adjustment),
+        "shares_estimate":  shares_estimate,
+        "action":           action,
+        "status":           status,
+        "dev_pct":          dev_pct,
+        "current_alloc":    round(current_alloc, 4),
+        "upper":            round(upper, 4),
+        "lower":            round(lower, 4),
+        "triggered":        status != "normal",
+        "amount_twd":       abs(round(adjustment)),
+        "current_beta":     portfolio_beta,
+        "target_beta":      target_beta,
     }
-
-    for pos in portfolio["positions"]:
-        if pos["beta"] <= 0:
-            continue
-
-        target_stock_value = target_beta * total_value / pos["beta"]
-        diff = pos["value"] - target_stock_value  # 正 → 持股過多；負 → 持股不足
-
-        if current_beta > upper_limit:
-            result["triggered"] = True
-            result["action"] = "SELL"
-            result["amount_twd"] = round(diff)
-            result["status"] = "sell"
-            # 換算約需賣幾股
-            if pos["price"] > 0:
-                result["shares_estimate"] = round(diff / pos["price"])
-        elif current_beta < lower_limit:
-            result["triggered"] = True
-            result["action"] = "BUY"
-            result["amount_twd"] = round(-diff)
-            result["status"] = "buy"
-            if pos["price"] > 0:
-                result["shares_estimate"] = round(-diff / pos["price"])
-        break  # 目前只有一檔持倉
-
-    return result
