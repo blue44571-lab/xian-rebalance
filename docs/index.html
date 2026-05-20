@@ -6,55 +6,39 @@
   <title>再平衡監控 Dashboard</title>
   <style>
     :root {
-      --bg: #0d1117;
-      --card: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --green: #3fb950;
-      --red: #f85149;
-      --yellow: #d29922;
-      --blue: #58a6ff;
-      --accent: #1f6feb;
+      --bg: #0d1117; --card: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e;
+      --green: #3fb950; --red: #f85149; --yellow: #d29922;
+      --blue: #58a6ff; --accent: #1f6feb; --orange: #e3b341;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: var(--bg);
-      color: var(--text);
+      background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      min-height: 100vh;
-      padding: 16px;
+      min-height: 100vh; padding: 16px;
     }
 
     /* ── 密碼保護 ── */
     #auth-overlay {
-      position: fixed; inset: 0;
-      background: var(--bg);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 999;
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; z-index: 999;
     }
     .auth-box {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 36px 28px;
-      width: min(360px, 90vw);
-      text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 36px 28px;
+      width: min(360px, 90vw); text-align: center;
     }
     .auth-box h2 { font-size: 1.1rem; margin-bottom: 8px; }
     .auth-box p  { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
     .auth-box input {
       width: 100%; padding: 12px 14px;
       background: var(--bg); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text);
-      font-size: 1rem; margin-bottom: 12px;
+      border-radius: 8px; color: var(--text); font-size: 1rem; margin-bottom: 12px;
     }
     .auth-box input:focus { outline: none; border-color: var(--accent); }
     .auth-box button {
-      width: 100%; padding: 12px;
-      background: var(--accent); color: #fff;
-      border: none; border-radius: 8px;
-      font-size: 1rem; cursor: pointer; font-weight: 600;
+      width: 100%; padding: 12px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;
     }
     .auth-box button:hover { background: #388bfd; }
     .auth-error { color: var(--red); font-size: 0.85rem; margin-top: 10px; min-height: 20px; }
@@ -64,98 +48,145 @@
 
     header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 20px; gap: 10px;
     }
-    header h1 { font-size: 1.15rem; font-weight: 700; }
-    .refresh-btn {
-      background: none; border: 1px solid var(--border);
-      color: var(--muted); padding: 6px 12px;
-      border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+    header h1 { font-size: 1.1rem; font-weight: 700; flex: 1; }
+    .icon-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+      white-space: nowrap;
     }
-    .refresh-btn:hover { color: var(--text); border-color: var(--text); }
+    .icon-btn:hover { color: var(--text); border-color: var(--text); }
 
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px 20px;
-      margin-bottom: 14px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px; margin-bottom: 14px;
     }
     .card-title {
-      font-size: 0.78rem; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .06em;
-      margin-bottom: 12px;
+      font-size: 0.75rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
     }
+    .card-title-row {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+    }
+    .card-title-row .card-title { margin-bottom: 0; }
 
-    /* 總資產 */
-    .total-value { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-    .total-sub   { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+    /* ── 即時報價 ── */
+    .price-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+    .price-big { font-size: 2.2rem; font-weight: 700; }
+    .price-change { font-size: 0.9rem; }
+    .price-meta { color: var(--muted); font-size: 0.78rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .dot-live { background: var(--green); animation: pulse 1.5s infinite; }
+    .dot-closed { background: var(--muted); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    /* 持倉列表 */
-    .position-row {
+    /* ── 持倉設定 ── */
+    .settings-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+    }
+    .field label {
+      display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px;
+    }
+    .field input {
+      width: 100%; padding: 9px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.9rem;
+    }
+    .field input:focus { outline: none; border-color: var(--accent); }
+    .save-btn {
+      width: 100%; padding: 10px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-weight: 600;
+    }
+    .save-btn:hover { background: #388bfd; }
+    .save-ok { color: var(--green); font-size: 0.78rem; text-align: center; margin-top: 8px; min-height: 18px; }
+
+    /* ── 持倉列表 ── */
+    .pos-row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
+      padding: 9px 0; border-bottom: 1px solid var(--border);
     }
-    .position-row:last-child { border-bottom: none; }
-    .pos-left .pos-name  { font-weight: 600; font-size: 0.95rem; }
-    .pos-left .pos-sub   { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
-    .pos-right { text-align: right; }
-    .pos-right .pos-value { font-weight: 600; }
-    .pos-right .pos-weight { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+    .pos-row:last-child { border-bottom: none; }
+    .pos-name { font-weight: 600; font-size: 0.92rem; }
+    .pos-sub  { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+    .pos-val  { font-weight: 600; text-align: right; }
+    .pos-wt   { color: var(--muted); font-size: 0.78rem; margin-top: 2px; text-align: right; }
 
-    /* Beta 區塊 */
-    .beta-numbers {
-      display: flex; justify-content: space-between; align-items: flex-end;
-      margin-bottom: 14px;
+    /* ── 模擬工具 ── */
+    .sim-label-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
     }
-    .beta-current { font-size: 2.2rem; font-weight: 700; }
-    .beta-meta    { text-align: right; color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+    .sim-price-display { font-size: 1.4rem; font-weight: 700; color: var(--orange); }
+    .sim-pct {
+      font-size: 0.85rem; font-weight: 600; padding: 3px 10px;
+      border-radius: 12px; background: rgba(227,179,65,0.15); color: var(--orange);
+    }
+    input[type=range] {
+      -webkit-appearance: none; width: 100%; height: 6px;
+      background: var(--border); border-radius: 3px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--orange); cursor: pointer;
+    }
+    .sim-marks {
+      display: flex; justify-content: space-between;
+      color: var(--muted); font-size: 0.7rem; margin-top: 4px;
+    }
+    .sim-banner {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(227,179,65,0.12); border: 1px solid rgba(227,179,65,0.3);
+      border-radius: 8px; padding: 8px 12px; margin-top: 12px;
+      font-size: 0.82rem; color: var(--orange);
+    }
+    .sim-reset {
+      margin-left: auto; background: none; border: 1px solid rgba(227,179,65,0.4);
+      color: var(--orange); padding: 2px 10px; border-radius: 10px;
+      font-size: 0.75rem; cursor: pointer;
+    }
+
+    /* ── Beta 量表 ── */
+    .beta-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+    .beta-big { font-size: 2.2rem; font-weight: 700; }
+    .beta-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
     .beta-meta span { display: block; }
-
-    /* Beta 量表（長條） */
     .gauge-track {
       position: relative; height: 10px; border-radius: 5px;
-      background: linear-gradient(to right, var(--green) 0%, var(--yellow) 45%, var(--red) 100%);
+      background: linear-gradient(to right, var(--green) 0%, var(--yellow) 50%, var(--red) 100%);
       margin-bottom: 6px;
     }
-    .gauge-range {
+    .gauge-safe {
       position: absolute; top: 0; height: 10px;
-      background: rgba(255,255,255,0.18); border-radius: 5px;
+      background: rgba(255,255,255,.15); border-radius: 5px;
     }
     .gauge-needle {
-      position: absolute; top: -4px;
-      width: 4px; height: 18px;
-      background: #fff; border-radius: 2px;
-      transform: translateX(-50%);
-      transition: left 0.4s ease;
+      position: absolute; top: -5px; width: 4px; height: 20px;
+      background: #fff; border-radius: 2px; transform: translateX(-50%);
+      transition: left .35s ease;
     }
     .gauge-labels {
       display: flex; justify-content: space-between;
-      color: var(--muted); font-size: 0.72rem;
+      color: var(--muted); font-size: 0.7rem;
     }
 
-    /* 再平衡狀態 */
+    /* ── 再平衡狀態 ── */
     .status-badge {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 14px; border-radius: 20px;
-      font-size: 0.85rem; font-weight: 600; margin-bottom: 10px;
+      padding: 5px 14px; border-radius: 20px;
+      font-size: 0.83rem; font-weight: 600; margin-bottom: 12px;
     }
-    .status-normal { background: rgba(63,185,80,0.15); color: var(--green); }
-    .status-sell   { background: rgba(248,81,73,0.15);  color: var(--red); }
-    .status-buy    { background: rgba(63,185,80,0.15);  color: var(--green); }
-
-    .rebalance-detail {
+    .s-normal { background: rgba(63,185,80,.15); color: var(--green); }
+    .s-sell   { background: rgba(248,81,73,.15); color: var(--red); }
+    .s-buy    { background: rgba(63,185,80,.15); color: var(--green); }
+    .rebal-box {
       background: var(--bg); border-radius: 8px;
-      padding: 12px 14px; font-size: 0.88rem; line-height: 1.8;
+      padding: 12px 14px; font-size: 0.87rem; line-height: 1.9;
     }
-    .rebalance-detail .label { color: var(--muted); }
-    .rebalance-detail .value { font-weight: 600; }
+    .rebal-box .lbl { color: var(--muted); }
+    .rebal-box .val { font-weight: 600; }
 
-    .last-updated {
-      text-align: center; color: var(--muted);
-      font-size: 0.75rem; margin-top: 20px; margin-bottom: 8px;
-    }
+    .footer { text-align: center; color: var(--muted); font-size: 0.73rem; margin: 20px 0 8px; }
   </style>
 </head>
 <body>
@@ -175,27 +206,91 @@
 <div id="dashboard">
   <header>
     <h1>📊 再平衡監控</h1>
-    <button class="refresh-btn" onclick="loadData()">↺ 重新整理</button>
+    <button class="icon-btn" onclick="refreshPrice()">↺ 更新報價</button>
   </header>
 
-  <!-- 總資產 -->
+  <!-- 即時報價 -->
   <div class="card">
-    <div class="card-title">總資產</div>
-    <div class="total-value" id="total-value">—</div>
-    <div class="total-sub" id="last-price-time"></div>
+    <div class="card-title-row">
+      <div class="card-title">即時報價</div>
+      <span id="market-status-dot"></span>
+    </div>
+    <div class="price-row">
+      <div class="price-big" id="price-display">—</div>
+      <div class="price-change" id="price-change"></div>
+    </div>
+    <div class="price-meta" id="price-meta">載入中…</div>
   </div>
 
-  <!-- 持倉 -->
+  <!-- 持倉設定 -->
   <div class="card">
-    <div class="card-title">持倉配置</div>
+    <div class="card-title">持倉設定</div>
+    <div class="settings-grid">
+      <div class="field">
+        <label>持有股數（股）</label>
+        <input type="number" id="s-shares" min="0" step="1" />
+      </div>
+      <div class="field">
+        <label>現金台幣（元）</label>
+        <input type="number" id="s-cash" min="0" step="1000" />
+      </div>
+      <div class="field">
+        <label>股票 Beta</label>
+        <input type="number" id="s-beta" min="0.1" max="5" step="0.1" />
+      </div>
+      <div class="field">
+        <label>目標 Beta</label>
+        <input type="number" id="s-target" min="0.1" max="5" step="0.1" />
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label>偏離閾值（±%，如 10 表示 ±10%）</label>
+        <input type="number" id="s-threshold" min="1" max="50" step="1" />
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveSettings()">儲存設定</button>
+    <div class="save-ok" id="save-ok"></div>
+  </div>
+
+  <!-- 持倉現況 -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">持倉現況</div>
+      <span id="sim-tag" style="display:none;font-size:0.72rem;color:var(--orange);font-weight:600;">⚡ 模擬中</span>
+    </div>
     <div id="positions-list"></div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between">
+      <span style="font-weight:600">總資產</span>
+      <span style="font-weight:700" id="total-value">—</span>
+    </div>
+  </div>
+
+  <!-- 模擬工具 -->
+  <div class="card">
+    <div class="card-title">模擬工具（假設股價變動）</div>
+    <div class="sim-label-row">
+      <div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:3px">模擬後股價</div>
+        <div class="sim-price-display" id="sim-price">—</div>
+      </div>
+      <div class="sim-pct" id="sim-pct-badge">0%</div>
+    </div>
+    <input type="range" id="sim-slider" min="-30" max="30" step="1" value="0"
+           oninput="onSimChange(this.value)" />
+    <div class="sim-marks">
+      <span>−30%</span><span>−20%</span><span>−10%</span><span>0</span>
+      <span>+10%</span><span>+20%</span><span>+30%</span>
+    </div>
+    <div class="sim-banner" id="sim-banner" style="display:none">
+      ⚡ 模擬模式：以下數據為假設股價計算結果
+      <button class="sim-reset" onclick="resetSim()">重設</button>
+    </div>
   </div>
 
   <!-- Portfolio Beta -->
   <div class="card">
     <div class="card-title">Portfolio Beta</div>
-    <div class="beta-numbers">
-      <div class="beta-current" id="beta-current">—</div>
+    <div class="beta-row">
+      <div class="beta-big" id="beta-current">—</div>
       <div class="beta-meta">
         <span>目標 <b id="beta-target">—</b></span>
         <span>偏離 <b id="beta-deviation">—</b></span>
@@ -203,169 +298,303 @@
       </div>
     </div>
     <div class="gauge-track">
-      <div class="gauge-range" id="gauge-range"></div>
+      <div class="gauge-safe" id="gauge-safe"></div>
       <div class="gauge-needle" id="gauge-needle"></div>
     </div>
     <div class="gauge-labels">
-      <span id="g-min">0.8</span>
-      <span>目標</span>
-      <span id="g-max">1.6</span>
+      <span id="g-lo">—</span><span>目標</span><span id="g-hi">—</span>
     </div>
   </div>
 
   <!-- 再平衡建議 -->
   <div class="card">
-    <div class="card-title">再平衡狀態</div>
+    <div class="card-title">再平衡建議</div>
     <div id="status-badge-wrap"></div>
-    <div class="rebalance-detail" id="rebalance-detail"></div>
+    <div class="rebal-box" id="rebal-detail"></div>
   </div>
 
-  <div class="last-updated" id="last-updated"></div>
+  <div class="footer" id="footer"></div>
 </div>
 
 <script>
-  // ── 密碼設定（將下方 HASH 換成你自己的 SHA-256 雜湊值） ──
-  // 產生方式：python3 -c "import hashlib; print(hashlib.sha256('你的密碼'.encode()).hexdigest())"
-  const PASSWORD_HASH = "52f2aabb94542cae2d424b73665c3c2af06771ad84bdff07fcc25732825502be";
-  const SESSION_KEY = "xian_rebalance_auth";
+/* ════════════════════════════════════════
+   密碼保護
+════════════════════════════════════════ */
+const PASSWORD_HASH = "52f2aabb94542cae2d424b73665c3c2af06771ad84bdff07fcc25732825502be";
+const SESSION_KEY   = "xian_auth";
 
-  async function sha256(text) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+async function sha256(t) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+async function checkPassword() {
+  const pwd = document.getElementById("pwd-input").value;
+  if (await sha256(pwd) === PASSWORD_HASH) {
+    sessionStorage.setItem(SESSION_KEY, "1");
+    boot();
+  } else {
+    document.getElementById("auth-error").textContent = "密碼錯誤，請再試一次。";
   }
+}
+document.getElementById("pwd-input").addEventListener("keydown", e => { if (e.key==="Enter") checkPassword(); });
 
-  async function checkPassword() {
-    const pwd = document.getElementById("pwd-input").value;
-    const hash = await sha256(pwd);
-    if (hash === PASSWORD_HASH) {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      document.getElementById("auth-overlay").style.display = "none";
-      document.getElementById("dashboard").style.display = "block";
-      loadData();
-    } else {
-      document.getElementById("auth-error").textContent = "密碼錯誤，請再試一次。";
-    }
-  }
+/* ════════════════════════════════════════
+   設定（localStorage）
+════════════════════════════════════════ */
+const SETTINGS_KEY = "xian_portfolio";
+const DEFAULTS = { shares: 1000, cashTwd: 200000, stockBeta: 2.0, targetBeta: 1.2, threshold: 10 };
 
-  document.getElementById("pwd-input").addEventListener("keydown", e => {
-    if (e.key === "Enter") checkPassword();
-  });
+function loadSettings() {
+  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); }
+  catch { return { ...DEFAULTS }; }
+}
+function saveSettings() {
+  const s = {
+    shares:    parseFloat(document.getElementById("s-shares").value)    || DEFAULTS.shares,
+    cashTwd:   parseFloat(document.getElementById("s-cash").value)      || DEFAULTS.cashTwd,
+    stockBeta: parseFloat(document.getElementById("s-beta").value)      || DEFAULTS.stockBeta,
+    targetBeta:parseFloat(document.getElementById("s-target").value)    || DEFAULTS.targetBeta,
+    threshold: parseFloat(document.getElementById("s-threshold").value) || DEFAULTS.threshold,
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  settings = s;
+  recalcAndRender();
+  const ok = document.getElementById("save-ok");
+  ok.textContent = "✅ 已儲存";
+  setTimeout(() => ok.textContent = "", 2000);
+}
+function fillSettingsUI(s) {
+  document.getElementById("s-shares").value    = s.shares;
+  document.getElementById("s-cash").value      = s.cashTwd;
+  document.getElementById("s-beta").value      = s.stockBeta;
+  document.getElementById("s-target").value    = s.targetBeta;
+  document.getElementById("s-threshold").value = s.threshold;
+}
 
-  if (sessionStorage.getItem(SESSION_KEY) === "1") {
-    document.getElementById("auth-overlay").style.display = "none";
-    document.getElementById("dashboard").style.display = "block";
-  }
+/* ════════════════════════════════════════
+   即時報價
+════════════════════════════════════════ */
+let currentPrice = 0;
+let priceSource = "—";
+let marketOpen = false;
 
-  // ── 讀取狀態 JSON ──
-  async function loadData() {
+async function fetchPrice() {
+  const ticker = "00631L.TW";
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`;
+
+  // 直接嘗試 Yahoo Finance（部分環境可行）
+  for (const url of [yahooUrl, proxyUrl]) {
     try {
-      const res = await fetch("data/state.json?t=" + Date.now());
-      if (!res.ok) throw new Error("無法讀取狀態檔");
-      const d = await res.json();
-      render(d);
-    } catch (e) {
-      document.getElementById("last-updated").textContent = "讀取失敗：" + e.message;
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const meta = d?.chart?.result?.[0]?.meta;
+      if (!meta) continue;
+      const price = meta.regularMarketPrice;
+      const prev  = meta.chartPreviousClose ?? meta.previousClose;
+      const state = meta.marketState ?? "";
+      if (price && price > 0) {
+        currentPrice = price;
+        priceSource  = "即時";
+        marketOpen   = state === "REGULAR";
+        updatePriceUI(price, prev, state, "即時");
+        return;
+      }
+    } catch { /* 嘗試下一個 */ }
+  }
+
+  // Fallback：從 state.json 讀取上次 GitHub Actions 抓到的價格
+  try {
+    const r = await fetch("data/state.json?t=" + Date.now());
+    const d = await r.json();
+    const price = d.portfolio?.positions?.[0]?.price ?? 0;
+    if (price > 0) {
+      currentPrice = price;
+      priceSource  = "快取";
+      marketOpen   = false;
+      updatePriceUI(price, null, "CLOSED", "快取（Actions 上次更新）");
+      return;
     }
+  } catch { /* 略 */ }
+
+  document.getElementById("price-meta").textContent = "❌ 無法取得報價";
+}
+
+function updatePriceUI(price, prev, state, source) {
+  document.getElementById("price-display").textContent = `$${price.toFixed(2)}`;
+  const dotEl = document.getElementById("market-status-dot");
+  if (state === "REGULAR") {
+    dotEl.innerHTML = `<span class="dot dot-live"></span><span style="font-size:.72rem;color:var(--green)">盤中</span>`;
+  } else {
+    dotEl.innerHTML = `<span class="dot dot-closed"></span><span style="font-size:.72rem;color:var(--muted)">收盤</span>`;
   }
-
-  function fmt(v) {
-    return "$" + Math.round(v).toLocaleString("zh-TW");
+  if (prev && prev > 0) {
+    const chg = price - prev;
+    const pct = chg / prev * 100;
+    const el  = document.getElementById("price-change");
+    el.textContent = `${chg >= 0 ? "+" : ""}${chg.toFixed(2)} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
+    el.style.color = chg >= 0 ? "var(--green)" : "var(--red)";
   }
+  const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+  document.getElementById("price-meta").textContent = `00631L 台灣50正2 ｜ ${source} ｜ 更新：${now}`;
+}
 
-  function render(d) {
-    const p = d.portfolio;
-    const b = d.beta;
-    const r = d.rebalancing;
+async function refreshPrice() {
+  document.getElementById("price-meta").textContent = "抓取中…";
+  await fetchPrice();
+  recalcAndRender();
+}
 
-    // 總資產
-    document.getElementById("total-value").textContent = fmt(p.total_value);
+/* ════════════════════════════════════════
+   計算引擎（純前端）
+════════════════════════════════════════ */
+let settings = {};
+let simPct = 0;
 
-    // 持倉
-    let posHtml = "";
-    for (const pos of p.positions) {
-      posHtml += `
-        <div class="position-row">
-          <div class="pos-left">
-            <div class="pos-name">${pos.name}</div>
-            <div class="pos-sub">${pos.shares.toLocaleString()} 股 × $${pos.price.toFixed(2)}</div>
-          </div>
-          <div class="pos-right">
-            <div class="pos-value">${fmt(pos.value)}</div>
-            <div class="pos-weight">${(pos.weight * 100).toFixed(1)}%</div>
-          </div>
-        </div>`;
-    }
-    posHtml += `
-      <div class="position-row">
-        <div class="pos-left">
-          <div class="pos-name">現金</div>
-          <div class="pos-sub">台幣存款</div>
-        </div>
-        <div class="pos-right">
-          <div class="pos-value">${fmt(p.cash_twd)}</div>
-          <div class="pos-weight">${(p.cash_weight * 100).toFixed(1)}%</div>
-        </div>
-      </div>`;
-    document.getElementById("positions-list").innerHTML = posHtml;
+function calcPortfolio(shares, cashTwd, price, stockBeta) {
+  const stockValue = shares * price;
+  const total      = stockValue + cashTwd;
+  const sw = total > 0 ? stockValue / total : 0;
+  const cw = total > 0 ? cashTwd / total : 0;
+  return { stockValue, cashTwd, total, stockWeight: sw, cashWeight: cw,
+           beta: parseFloat((sw * stockBeta).toFixed(4)) };
+}
 
-    // Beta
-    const betaColor = b.status === "sell" ? "#f85149" : b.status === "buy" ? "#3fb950" : "#e6edf3";
-    document.getElementById("beta-current").style.color = betaColor;
-    document.getElementById("beta-current").textContent = b.current.toFixed(3);
-    document.getElementById("beta-target").textContent = b.target;
-    document.getElementById("beta-deviation").textContent = (b.deviation_pct >= 0 ? "+" : "") + b.deviation_pct.toFixed(2) + "%";
-    document.getElementById("beta-range").textContent = `${b.lower_limit} ～ ${b.upper_limit}`;
-
-    // 量表（假設顯示範圍 0.8 到 1.6）
-    const gMin = b.target * 0.67, gMax = b.target * 1.33;
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const pct = v => ((clamp(v, gMin, gMax) - gMin) / (gMax - gMin) * 100).toFixed(1) + "%";
-
-    document.getElementById("g-min").textContent = gMin.toFixed(2);
-    document.getElementById("g-max").textContent = gMax.toFixed(2);
-
-    const rangeEl = document.getElementById("gauge-range");
-    const loPct = ((b.lower_limit - gMin) / (gMax - gMin) * 100).toFixed(1);
-    const hiPct = ((b.upper_limit - gMin) / (gMax - gMin) * 100).toFixed(1);
-    rangeEl.style.left = loPct + "%";
-    rangeEl.style.width = (hiPct - loPct) + "%";
-
-    document.getElementById("gauge-needle").style.left = pct(b.current);
-
-    // 再平衡
-    const statusMap = {
-      normal: ["status-normal", "✅ 正常，無需操作"],
-      sell:   ["status-sell",   "🔴 觸發！建議賣出"],
-      buy:    ["status-buy",    "🟢 觸發！建議買進"],
-    };
-    const [cls, label] = statusMap[b.status] || statusMap.normal;
-    document.getElementById("status-badge-wrap").innerHTML =
-      `<div class="status-badge ${cls}">${label}</div>`;
-
-    let detail = "";
-    if (r.triggered) {
-      const verb = r.action === "SELL" ? "賣出" : "買進";
-      detail = `
-        <div><span class="label">建議動作：</span><span class="value">${verb} 00631L</span></div>
-        <div><span class="label">建議金額：</span><span class="value">${fmt(r.amount_twd)} TWD</span></div>
-        <div><span class="label">約需股數：</span><span class="value">${(r.shares_estimate || 0).toLocaleString()} 股</span></div>
-        <div><span class="label">執行後 Beta：</span><span class="value">${b.target}</span></div>`;
-    } else {
-      detail = `<div style="color:var(--muted)">Beta 在目標區間內（${b.lower_limit} ～ ${b.upper_limit}），持倉維持不動。</div>`;
-    }
-    document.getElementById("rebalance-detail").innerHTML = detail;
-
-    // 更新時間
-    const dt = new Date(d.last_updated);
-    document.getElementById("last-updated").textContent =
-      "最後更新：" + dt.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+function calcRebalance(portfolio, targetBeta, thresholdPct, price, stockBeta) {
+  const threshold = thresholdPct / 100;
+  const upper = parseFloat((targetBeta * (1 + threshold)).toFixed(4));
+  const lower = parseFloat((targetBeta * (1 - threshold)).toFixed(4));
+  const dev   = parseFloat(((portfolio.beta - targetBeta) / targetBeta * 100).toFixed(2));
+  let action = null, amount = 0, shares = 0;
+  const status = portfolio.beta > upper ? "sell" : portfolio.beta < lower ? "buy" : "normal";
+  if (status === "sell") {
+    action = "SELL";
+    amount = Math.round(portfolio.total * (portfolio.beta - targetBeta) / stockBeta);
+    shares = price > 0 ? Math.round(amount / price) : 0;
+  } else if (status === "buy") {
+    action = "BUY";
+    amount = Math.round(portfolio.total * (targetBeta - portfolio.beta) / stockBeta);
+    shares = price > 0 ? Math.round(amount / price) : 0;
   }
+  return { upper, lower, dev, status, action, amount, shares };
+}
 
-  // 每 60 秒自動重整
-  if (sessionStorage.getItem(SESSION_KEY) === "1") {
-    loadData();
-    setInterval(loadData, 60000);
+/* ════════════════════════════════════════
+   模擬工具
+════════════════════════════════════════ */
+function onSimChange(val) {
+  simPct = parseFloat(val);
+  recalcAndRender();
+}
+function resetSim() {
+  simPct = 0;
+  document.getElementById("sim-slider").value = 0;
+  recalcAndRender();
+}
+
+/* ════════════════════════════════════════
+   渲染
+════════════════════════════════════════ */
+function fmt(v) { return "$" + Math.round(v).toLocaleString("zh-TW"); }
+
+function recalcAndRender() {
+  if (!currentPrice || !settings.shares) return;
+
+  const simPrice  = parseFloat((currentPrice * (1 + simPct / 100)).toFixed(2));
+  const isSim     = simPct !== 0;
+  const usePrice  = isSim ? simPrice : currentPrice;
+  const portfolio = calcPortfolio(settings.shares, settings.cashTwd, usePrice, settings.stockBeta);
+  const rebal     = calcRebalance(portfolio, settings.targetBeta, settings.threshold, usePrice, settings.stockBeta);
+
+  // 模擬器 UI
+  document.getElementById("sim-price").textContent = `$${simPrice.toFixed(2)}`;
+  const sign = simPct > 0 ? "+" : "";
+  document.getElementById("sim-pct-badge").textContent = `${sign}${simPct}%`;
+  document.getElementById("sim-banner").style.display  = isSim ? "flex" : "none";
+  document.getElementById("sim-tag").style.display     = isSim ? "inline" : "none";
+  document.getElementById("sim-pct-badge").style.color = simPct < 0 ? "var(--red)" : simPct > 0 ? "var(--green)" : "var(--orange)";
+  document.getElementById("sim-pct-badge").style.background = simPct < 0 ? "rgba(248,81,73,.12)" : simPct > 0 ? "rgba(63,185,80,.12)" : "rgba(227,179,65,.12)";
+
+  // 持倉列表
+  const stockLabel = `${settings.shares.toLocaleString()} 股 × $${usePrice.toFixed(2)}`;
+  document.getElementById("positions-list").innerHTML = `
+    <div class="pos-row">
+      <div><div class="pos-name">台灣50正2（00631L）</div><div class="pos-sub">${stockLabel}</div></div>
+      <div><div class="pos-val">${fmt(portfolio.stockValue)}</div><div class="pos-wt">${(portfolio.stockWeight*100).toFixed(1)}%</div></div>
+    </div>
+    <div class="pos-row">
+      <div><div class="pos-name">現金</div><div class="pos-sub">台幣存款</div></div>
+      <div><div class="pos-val">${fmt(portfolio.cashTwd)}</div><div class="pos-wt">${(portfolio.cashWeight*100).toFixed(1)}%</div></div>
+    </div>`;
+  document.getElementById("total-value").textContent = fmt(portfolio.total);
+
+  // Beta
+  const betaColor = rebal.status === "sell" ? "var(--red)" : rebal.status === "buy" ? "var(--green)" : "var(--text)";
+  const betaEl = document.getElementById("beta-current");
+  betaEl.textContent = portfolio.beta.toFixed(3);
+  betaEl.style.color = betaColor;
+  document.getElementById("beta-target").textContent    = settings.targetBeta;
+  document.getElementById("beta-deviation").textContent = (rebal.dev >= 0 ? "+" : "") + rebal.dev.toFixed(2) + "%";
+  document.getElementById("beta-range").textContent     = `${rebal.lower} ～ ${rebal.upper}`;
+
+  // 量表（顯示範圍：targetBeta ±33%）
+  const gMin = parseFloat((settings.targetBeta * 0.67).toFixed(2));
+  const gMax = parseFloat((settings.targetBeta * 1.33).toFixed(2));
+  const toPct = v => Math.max(0, Math.min(100, (v - gMin) / (gMax - gMin) * 100));
+  document.getElementById("g-lo").textContent = gMin;
+  document.getElementById("g-hi").textContent = gMax;
+  const loPct = toPct(rebal.lower), hiPct = toPct(rebal.upper);
+  document.getElementById("gauge-safe").style.left  = loPct + "%";
+  document.getElementById("gauge-safe").style.width = (hiPct - loPct) + "%";
+  document.getElementById("gauge-needle").style.left = toPct(portfolio.beta) + "%";
+
+  // 再平衡
+  const badgeMap = {
+    normal: ["s-normal", "✅ 正常，無需操作"],
+    sell:   ["s-sell",   "🔴 觸發！Beta 過高，建議賣出"],
+    buy:    ["s-buy",    "🟢 觸發！Beta 過低，建議買進"],
+  };
+  const [bcls, blabel] = badgeMap[rebal.status];
+  document.getElementById("status-badge-wrap").innerHTML =
+    `<div class="status-badge ${bcls}">${blabel}</div>`;
+
+  let detail;
+  if (rebal.action) {
+    const verb = rebal.action === "SELL" ? "賣出" : "買進";
+    detail = `
+      <div><span class="lbl">建議動作</span>：<span class="val">${verb} 00631L</span></div>
+      <div><span class="lbl">建議金額</span>：<span class="val">${fmt(rebal.amount)} TWD</span></div>
+      <div><span class="lbl">約需股數</span>：<span class="val">${rebal.shares.toLocaleString()} 股</span></div>
+      <div><span class="lbl">執行後 Beta</span>：<span class="val">${settings.targetBeta}</span></div>`;
+  } else {
+    detail = `<div style="color:var(--muted)">Beta 在目標區間（${rebal.lower} ～ ${rebal.upper}）內，持倉維持不動。</div>`;
   }
+  document.getElementById("rebal-detail").innerHTML = detail;
+
+  // 頁底
+  const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+  document.getElementById("footer").textContent = `計算時間：${now}`;
+}
+
+/* ════════════════════════════════════════
+   啟動
+════════════════════════════════════════ */
+async function boot() {
+  document.getElementById("auth-overlay").style.display = "none";
+  document.getElementById("dashboard").style.display    = "block";
+  settings = loadSettings();
+  fillSettingsUI(settings);
+  await fetchPrice();
+  recalcAndRender();
+  // 每 60 秒自動更新報價（盤中期間有意義）
+  setInterval(async () => {
+    await fetchPrice();
+    recalcAndRender();
+  }, 60000);
+}
+
+if (sessionStorage.getItem(SESSION_KEY) === "1") { boot(); }
 </script>
 </body>
 </html>
