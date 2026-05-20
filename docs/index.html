@@ -187,6 +187,31 @@
     .rebal-box .val { font-weight: 600; }
 
     .footer { text-align: center; color: var(--muted); font-size: 0.73rem; margin: 20px 0 8px; }
+
+    /* ── 手動輸入股價 ── */
+    .price-edit-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      padding: 3px 9px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
+      margin-left: 10px; vertical-align: middle;
+    }
+    .price-edit-btn:hover { color: var(--text); border-color: var(--text); }
+    .manual-row {
+      display: flex; gap: 8px; margin-top: 10px; align-items: center;
+    }
+    .manual-row input {
+      flex: 1; padding: 8px 12px; background: var(--bg);
+      border: 1px solid var(--accent); border-radius: 8px;
+      color: var(--text); font-size: 1rem;
+    }
+    .manual-row input:focus { outline: none; }
+    .manual-row .ok-btn {
+      padding: 8px 14px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-size: 0.88rem; cursor: pointer;
+    }
+    .manual-row .cancel-btn {
+      padding: 8px 10px; background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 8px; font-size: 0.88rem; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -218,6 +243,12 @@
     <div class="price-row">
       <div class="price-big" id="price-display">—</div>
       <div class="price-change" id="price-change"></div>
+      <button class="price-edit-btn" onclick="toggleManualEdit()" title="手動輸入">✏️ 手動</button>
+    </div>
+    <div class="manual-row" id="manual-row" style="display:none">
+      <input type="number" id="manual-price-input" step="0.01" min="0.01" placeholder="輸入今日股價" />
+      <button class="ok-btn" onclick="applyManualPrice()">確認</button>
+      <button class="cancel-btn" onclick="toggleManualEdit()">取消</button>
     </div>
     <div class="price-meta" id="price-meta">載入中…</div>
   </div>
@@ -375,50 +406,82 @@ function fillSettingsUI(s) {
    即時報價
 ════════════════════════════════════════ */
 let currentPrice = 0;
-let priceSource = "—";
-let marketOpen = false;
+let marketOpen   = false;
+const PRICE_CACHE_KEY = "xian_price_cache";
+
+// 先從 localStorage 快取還原，讓畫面不要空白
+function restoreCachedPrice() {
+  try {
+    const c = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || "{}");
+    if (c.price > 0) {
+      currentPrice = c.price;
+      const age = Math.round((Date.now() - (c.ts || 0)) / 60000);
+      updatePriceUI(c.price, c.prev ?? null, "CLOSED", `快取（${age} 分鐘前）`);
+    }
+  } catch { /* 略 */ }
+}
 
 async function fetchPrice() {
-  const ticker = "00631L.TW";
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`;
+  document.getElementById("price-meta").textContent = "抓取中…";
 
-  // 直接嘗試 Yahoo Finance（部分環境可行）
-  for (const url of [yahooUrl, proxyUrl]) {
-    try {
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const meta = d?.chart?.result?.[0]?.meta;
-      if (!meta) continue;
-      const price = meta.regularMarketPrice;
-      const prev  = meta.chartPreviousClose ?? meta.previousClose;
-      const state = meta.marketState ?? "";
-      if (price && price > 0) {
+  // ── 方法 1：TWSE 官方即時 API（透過 allorigins 解決 CORS）──
+  try {
+    const twseUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631L.tw&_=${Date.now()}`;
+    const proxy   = `https://api.allorigins.win/raw?url=${encodeURIComponent(twseUrl)}`;
+    const r = await fetch(proxy, { cache: "no-store" });
+    const d = await r.json();
+    const m = d?.msgArray?.[0];
+    if (m) {
+      // z = 即時成交價，pz = 最新成交價（收盤後也有值），y = 昨收
+      const price = parseFloat(m.z || m.pz || "0");
+      const prev  = parseFloat(m.y || "0");
+      const isOpen = !!(m.z && m.z !== "-" && m.z !== "");
+      if (price > 0) {
         currentPrice = price;
-        priceSource  = "即時";
-        marketOpen   = state === "REGULAR";
-        updatePriceUI(price, prev, state, "即時");
+        marketOpen   = isOpen;
+        const src    = isOpen ? "TWSE 即時" : "TWSE 收盤";
+        saveAndRenderPrice(price, prev, isOpen ? "REGULAR" : "CLOSED", src);
         return;
       }
-    } catch { /* 嘗試下一個 */ }
-  }
+    }
+  } catch (e) { console.warn("TWSE fetch 失敗:", e); }
 
-  // Fallback：從 state.json 讀取上次 GitHub Actions 抓到的價格
+  // ── 方法 2：Yahoo Finance（透過 allorigins）──
+  try {
+    const yUrl  = "https://query1.finance.yahoo.com/v8/finance/chart/00631L.TW?interval=1d&range=5d";
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`;
+    const r = await fetch(proxy, { cache: "no-store" });
+    const d = await r.json();
+    const meta = d?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice > 0) {
+      const price = meta.regularMarketPrice;
+      const prev  = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+      const state = meta.marketState ?? "CLOSED";
+      currentPrice = price;
+      marketOpen   = state === "REGULAR";
+      saveAndRenderPrice(price, prev, state, "Yahoo Finance");
+      return;
+    }
+  } catch (e) { console.warn("Yahoo fetch 失敗:", e); }
+
+  // ── 方法 3：GitHub Actions 上次寫入的 state.json ──
   try {
     const r = await fetch("data/state.json?t=" + Date.now());
     const d = await r.json();
     const price = d.portfolio?.positions?.[0]?.price ?? 0;
     if (price > 0) {
       currentPrice = price;
-      priceSource  = "快取";
-      marketOpen   = false;
-      updatePriceUI(price, null, "CLOSED", "快取（Actions 上次更新）");
+      saveAndRenderPrice(price, null, "CLOSED", "⚠️ Actions 快取（可能非今日）");
       return;
     }
   } catch { /* 略 */ }
 
-  document.getElementById("price-meta").textContent = "❌ 無法取得報價";
+  document.getElementById("price-meta").textContent = "❌ 無法取得報價，請手動輸入";
+}
+
+function saveAndRenderPrice(price, prev, state, source) {
+  localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify({ price, prev, ts: Date.now() }));
+  updatePriceUI(price, prev, state, source);
 }
 
 function updatePriceUI(price, prev, state, source) {
@@ -440,8 +503,30 @@ function updatePriceUI(price, prev, state, source) {
   document.getElementById("price-meta").textContent = `00631L 台灣50正2 ｜ ${source} ｜ 更新：${now}`;
 }
 
+// ── 手動輸入 ──
+function toggleManualEdit() {
+  const row = document.getElementById("manual-row");
+  const visible = row.style.display !== "none";
+  row.style.display = visible ? "none" : "flex";
+  if (!visible) {
+    const inp = document.getElementById("manual-price-input");
+    inp.value = currentPrice > 0 ? currentPrice : "";
+    inp.focus();
+  }
+}
+function applyManualPrice() {
+  const val = parseFloat(document.getElementById("manual-price-input").value);
+  if (!val || val <= 0) return;
+  currentPrice = val;
+  saveAndRenderPrice(val, null, "CLOSED", "手動輸入");
+  document.getElementById("manual-row").style.display = "none";
+  recalcAndRender();
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.getElementById("manual-row").style.display !== "none") applyManualPrice();
+});
+
 async function refreshPrice() {
-  document.getElementById("price-meta").textContent = "抓取中…";
   await fetchPrice();
   recalcAndRender();
 }
@@ -585,7 +670,9 @@ async function boot() {
   document.getElementById("dashboard").style.display    = "block";
   settings = loadSettings();
   fillSettingsUI(settings);
-  await fetchPrice();
+  restoreCachedPrice();  // 先顯示快取，不讓畫面空白
+  recalcAndRender();
+  await fetchPrice();    // 再背景抓最新
   recalcAndRender();
   // 每 60 秒自動更新報價（盤中期間有意義）
   setInterval(async () => {
