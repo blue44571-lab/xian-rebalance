@@ -101,6 +101,32 @@
     .save-btn:hover { background: #388bfd; }
     .save-ok { color: var(--green); font-size: 0.78rem; text-align: center; margin-top: 8px; min-height: 18px; }
 
+    /* ── 持倉上下兩區塊 ── */
+    .pos-section { padding: 14px 0; }
+    .pos-section:first-of-type { padding-top: 0; }
+    .pos-section-label {
+      font-size: 0.75rem; font-weight: 700; color: var(--blue);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px;
+    }
+    .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    .pos-inputs { display: flex; flex-direction: column; gap: 8px; }
+    .field-sm label {
+      display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 4px;
+    }
+    .field-sm input {
+      width: 100%; padding: 7px 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 0.85rem;
+    }
+    .field-sm input:focus { outline: none; border-color: var(--accent); }
+    .pos-stats { display: flex; flex-direction: column; gap: 10px; }
+    .stat-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; }
+    .stat-value { font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+    .stat-sub   { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .mini-bar   { height: 4px; background: var(--border); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+    .mini-bar-fill { height: 100%; border-radius: 2px; transition: width .35s ease; }
+    .section-divider { border: none; border-top: 1px solid var(--border); margin: 0 -20px; }
+
     /* ── 持倉列表 ── */
     .pos-row {
       display: flex; justify-content: space-between; align-items: center;
@@ -256,28 +282,82 @@
   <!-- 持倉設定 -->
   <div class="card">
     <div class="card-title">持倉設定</div>
-    <div class="settings-grid">
-      <div class="field">
-        <label>持有股數（股）</label>
-        <input type="number" id="s-shares" min="0" step="1" />
-      </div>
-      <div class="field">
-        <label>現金台幣（元）</label>
-        <input type="number" id="s-cash" min="0" step="1000" />
-      </div>
-      <div class="field">
-        <label>股票 Beta</label>
-        <input type="number" id="s-beta" min="0.1" max="5" step="0.1" />
-      </div>
-      <div class="field">
-        <label>目標配置比例（%）</label>
-        <input type="number" id="s-alloc" min="1" max="99" step="1" />
-      </div>
-      <div class="field" style="grid-column:1/-1">
-        <label>偏離閾值（±%，如 10 表示 ±10%）</label>
-        <input type="number" id="s-threshold" min="1" max="50" step="1" />
+
+    <!-- ▲ 正二區塊 -->
+    <div class="pos-section">
+      <div class="pos-section-label">📈 台灣50正2（00631L）</div>
+      <div class="pos-grid">
+        <div class="pos-inputs">
+          <div class="field-sm">
+            <label>持有股數（股）</label>
+            <input type="number" id="s-shares" min="0" step="1" oninput="updateSettingsStats()" />
+          </div>
+          <div class="field-sm">
+            <label>持有成本（元 / 股）</label>
+            <input type="number" id="s-cost" min="0" step="0.01" placeholder="平均成本" oninput="updateSettingsStats()" />
+          </div>
+        </div>
+        <div class="pos-stats">
+          <div>
+            <div class="stat-label">配置比例</div>
+            <div class="stat-value" id="stat-stock-pct">—</div>
+            <div class="mini-bar"><div class="mini-bar-fill" id="bar-stock" style="background:var(--accent)"></div></div>
+          </div>
+          <div>
+            <div class="stat-label">未實現損益</div>
+            <div class="stat-value" id="stat-pnl">—</div>
+            <div class="stat-sub" id="stat-pnl-sub">請輸入持有成本</div>
+          </div>
+        </div>
       </div>
     </div>
+
+    <hr class="section-divider" />
+
+    <!-- ▼ 現金區塊 -->
+    <div class="pos-section">
+      <div class="pos-section-label">💵 現金部位</div>
+      <div class="pos-grid">
+        <div class="pos-inputs">
+          <div class="field-sm">
+            <label>現金台幣（元）</label>
+            <input type="number" id="s-cash" min="0" step="1000" oninput="updateSettingsStats()" />
+          </div>
+        </div>
+        <div class="pos-stats">
+          <div>
+            <div class="stat-label">配置比例</div>
+            <div class="stat-value" id="stat-cash-pct">—</div>
+            <div class="mini-bar"><div class="mini-bar-fill" id="bar-cash" style="background:var(--blue)"></div></div>
+          </div>
+          <div>
+            <div class="stat-label">較上次紀錄</div>
+            <div class="stat-value" id="stat-cash-change">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- 其他參數 -->
+    <div style="padding-top:14px">
+      <div class="settings-grid">
+        <div class="field">
+          <label>目標配置比例（%）</label>
+          <input type="number" id="s-alloc" min="1" max="99" step="1" />
+        </div>
+        <div class="field">
+          <label>偏離閾值（±%）</label>
+          <input type="number" id="s-threshold" min="1" max="50" step="1" />
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>股票 Beta（正二為 2.0）</label>
+          <input type="number" id="s-beta" min="0.1" max="5" step="0.1" />
+        </div>
+      </div>
+    </div>
+
     <button class="save-btn" onclick="saveSettings()">儲存設定</button>
     <div class="save-ok" id="save-ok"></div>
   </div>
@@ -384,7 +464,7 @@ document.getElementById("pwd-input").addEventListener("keydown", e => { if (e.ke
    設定（localStorage）
 ════════════════════════════════════════ */
 const SETTINGS_KEY = "xian_portfolio";
-const DEFAULTS = { shares: 1000, cashTwd: 200000, stockBeta: 2.0, targetAllocation: 60, threshold: 10 };
+const DEFAULTS = { shares: 1000, cashTwd: 200000, costPerShare: 0, stockBeta: 2.0, targetAllocation: 60, threshold: 10 };
 
 function loadSettings() {
   try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); }
@@ -394,6 +474,7 @@ function saveSettings() {
   const s = {
     shares:          parseFloat(document.getElementById("s-shares").value)    || DEFAULTS.shares,
     cashTwd:         parseFloat(document.getElementById("s-cash").value)      || DEFAULTS.cashTwd,
+    costPerShare:    parseFloat(document.getElementById("s-cost").value)      || 0,
     stockBeta:       parseFloat(document.getElementById("s-beta").value)      || DEFAULTS.stockBeta,
     targetAllocation:parseFloat(document.getElementById("s-alloc").value)     || DEFAULTS.targetAllocation,
     threshold:       parseFloat(document.getElementById("s-threshold").value) || DEFAULTS.threshold,
@@ -408,6 +489,7 @@ function saveSettings() {
 function fillSettingsUI(s) {
   document.getElementById("s-shares").value    = s.shares;
   document.getElementById("s-cash").value      = s.cashTwd;
+  document.getElementById("s-cost").value      = s.costPerShare || "";
   document.getElementById("s-beta").value      = s.stockBeta;
   document.getElementById("s-alloc").value     = s.targetAllocation ?? DEFAULTS.targetAllocation;
   document.getElementById("s-threshold").value = s.threshold;
@@ -540,6 +622,59 @@ document.addEventListener("keydown", e => {
 async function refreshPrice() {
   await fetchPrice();
   recalcAndRender();
+}
+
+/* ════════════════════════════════════════
+   持倉設定即時統計
+════════════════════════════════════════ */
+let prevDayRecord = null; // 上一筆日報紀錄（從 records.json 載入）
+
+function updateSettingsStats() {
+  if (!currentPrice || currentPrice <= 0) return;
+
+  const shares = parseFloat(document.getElementById("s-shares").value) || 0;
+  const cost   = parseFloat(document.getElementById("s-cost").value)   || 0;
+  const cash   = parseFloat(document.getElementById("s-cash").value)   || 0;
+
+  const stockValue = shares * currentPrice;
+  const total      = stockValue + cash;
+  const stockPct   = total > 0 ? stockValue / total * 100 : 0;
+  const cashPct    = total > 0 ? cash / total * 100 : 0;
+
+  // 配置比例
+  document.getElementById("stat-stock-pct").textContent = stockPct.toFixed(1) + "%";
+  document.getElementById("bar-stock").style.width = Math.min(stockPct, 100) + "%";
+  document.getElementById("stat-cash-pct").textContent  = cashPct.toFixed(1) + "%";
+  document.getElementById("bar-cash").style.width  = Math.min(cashPct, 100) + "%";
+
+  // 未實現損益
+  if (cost > 0 && shares > 0) {
+    const pnl    = (currentPrice - cost) * shares;
+    const pnlPct = (currentPrice - cost) / cost * 100;
+    const s1     = pnl >= 0 ? "+" : "";
+    const col    = pnl >= 0 ? "var(--green)" : "var(--red)";
+    document.getElementById("stat-pnl").innerHTML =
+      `<span style="color:${col}">${s1}${fmt(pnl)}</span>`;
+    document.getElementById("stat-pnl-sub").innerHTML =
+      `<span style="color:${col}">${s1}${pnlPct.toFixed(2)}%</span>`
+      + `<span style="color:var(--muted)"> ｜均成本 $${cost.toFixed(2)}</span>`;
+  } else {
+    document.getElementById("stat-pnl").textContent     = "—";
+    document.getElementById("stat-pnl-sub").textContent = "請輸入持有成本";
+  }
+
+  // 較上次紀錄現金水位
+  const prevCash = prevDayRecord?.cash ?? 0;
+  if (prevCash > 0) {
+    const diff  = cash - prevCash;
+    const sign  = diff >= 0 ? "+" : "";
+    const col   = diff >= 0 ? "var(--green)" : "var(--red)";
+    document.getElementById("stat-cash-change").innerHTML =
+      `<span style="color:${col}">${sign}${fmt(diff)}</span>`
+      + `<div class="stat-sub" style="margin-top:2px;color:var(--muted)">vs ${prevDayRecord.date} ${fmt(prevCash)}</div>`;
+  } else {
+    document.getElementById("stat-cash-change").textContent = "尚無紀錄可比較";
+  }
 }
 
 /* ════════════════════════════════════════
@@ -694,6 +829,8 @@ function recalcAndRender() {
     </div>`}
   `;
 
+  updateSettingsStats();
+
   // 頁底
   const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
   document.getElementById("footer").textContent = `計算時間：${now}`;
@@ -719,6 +856,10 @@ function renderRecords(records) {
     el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">收盤後自動記錄，明日起可查閱</div>';
     return;
   }
+
+  // 儲存最近一筆供持倉設定「較上次紀錄」使用
+  prevDayRecord = records[records.length - 1];
+  updateSettingsStats();
 
   document.getElementById("records-count").textContent = `共 ${records.length} 筆`;
 
