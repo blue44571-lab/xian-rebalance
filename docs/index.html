@@ -502,14 +502,24 @@ let currentPrice = 0;
 let marketOpen   = false;
 const PRICE_CACHE_KEY = "xian_price_cache";
 
+// 依台灣時間判斷是否開盤中（09:00–13:30，週一到週五）
+// 不依賴 API 的 z 欄位，因為開盤初期 z 可能是 "-"（尚無成交）
+function isTaiwanMarketOpen() {
+  const tp   = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const day  = tp.getDay();
+  const mins = tp.getHours() * 60 + tp.getMinutes();
+  return day >= 1 && day <= 5 && mins >= 9 * 60 && mins < 13 * 60 + 30;
+}
+
 // 先從 localStorage 快取還原，讓畫面不要空白
 function restoreCachedPrice() {
   try {
     const c = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || "{}");
     if (c.price > 0) {
       currentPrice = c.price;
-      const age = Math.round((Date.now() - (c.ts || 0)) / 60000);
-      updatePriceUI(c.price, c.prev ?? null, "CLOSED", `快取（${age} 分鐘前）`);
+      const age    = Math.round((Date.now() - (c.ts || 0)) / 60000);
+      const isOpen = isTaiwanMarketOpen();
+      updatePriceUI(c.price, c.prev ?? null, isOpen ? "REGULAR" : "CLOSED", `快取（${age} 分鐘前）`);
     }
   } catch { /* 略 */ }
 }
@@ -525,14 +535,20 @@ async function fetchPrice() {
     const d = await r.json();
     const m = d?.msgArray?.[0];
     if (m) {
-      // z = 即時成交價，pz = 最新成交價（收盤後也有值），y = 昨收
-      const price = parseFloat(m.z || m.pz || "0");
-      const prev  = parseFloat(m.y || "0");
-      const isOpen = !!(m.z && m.z !== "-" && m.z !== "");
+      // z = 即時成交（開盤初期可能是 "-"），pz = 最新成交，y = 昨收
+      const rawZ  = m.z  && m.z  !== "-" ? m.z  : null;
+      const rawPz = m.pz && m.pz !== "-" ? m.pz : null;
+      const rawY  = m.y  && m.y  !== "-" ? m.y  : null;
+      const price = parseFloat(rawZ || rawPz || rawY || "0");
+      const prev  = parseFloat(rawY || "0");
+      const isOpen   = isTaiwanMarketOpen();   // 依台灣時間，非依 API 欄位
+      const hasLive  = !!rawZ;
       if (price > 0) {
         currentPrice = price;
         marketOpen   = isOpen;
-        const src    = isOpen ? "TWSE 即時" : "TWSE 收盤";
+        const src = isOpen
+          ? (hasLive ? "TWSE 即時" : "TWSE 盤中（尚無成交，以昨收計）")
+          : "TWSE 收盤";
         saveAndRenderPrice(price, prev, isOpen ? "REGULAR" : "CLOSED", src);
         return;
       }
@@ -547,12 +563,12 @@ async function fetchPrice() {
     const d = await r.json();
     const meta = d?.chart?.result?.[0]?.meta;
     if (meta?.regularMarketPrice > 0) {
-      const price = meta.regularMarketPrice;
-      const prev  = meta.chartPreviousClose ?? meta.previousClose ?? 0;
-      const state = meta.marketState ?? "CLOSED";
+      const price  = meta.regularMarketPrice;
+      const prev   = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+      const isOpen = isTaiwanMarketOpen();
       currentPrice = price;
-      marketOpen   = state === "REGULAR";
-      saveAndRenderPrice(price, prev, state, "Yahoo Finance");
+      marketOpen   = isOpen;
+      saveAndRenderPrice(price, prev, isOpen ? "REGULAR" : "CLOSED", "Yahoo Finance");
       return;
     }
   } catch (e) { console.warn("Yahoo fetch 失敗:", e); }
