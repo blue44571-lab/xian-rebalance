@@ -214,6 +214,17 @@
 
     .footer { text-align: center; color: var(--muted); font-size: 0.73rem; margin: 20px 0 8px; }
 
+    /* ── 買賣交易 ── */
+    .trade-toggle {
+      padding: 4px 14px; border-radius: 6px; font-size: 0.82rem;
+      font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+      background: none; color: var(--muted); transition: all .15s;
+    }
+    .trade-toggle.active-buy  { background: rgba(63,185,80,.15);  color: var(--green); border-color: var(--green); }
+    .trade-toggle.active-sell { background: rgba(248,81,73,.15); color: var(--red);   border-color: var(--red);   }
+    .trade-preview-row { display: flex; justify-content: space-between; padding: 3px 0; }
+    .trade-preview-row .lbl { color: var(--muted); }
+
     /* ── 手動輸入股價 ── */
     .price-edit-btn {
       background: none; border: 1px solid var(--border); color: var(--muted);
@@ -362,13 +373,69 @@
     <div class="save-ok" id="save-ok"></div>
   </div>
 
+  <!-- 買賣交易輸入 -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">記錄買賣</div>
+      <div style="display:flex;gap:6px">
+        <button id="trade-buy-btn"  class="trade-toggle active-buy"  onclick="setTradeAction('BUY')">買入</button>
+        <button id="trade-sell-btn" class="trade-toggle"             onclick="setTradeAction('SELL')">賣出</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="field">
+        <label>股數（股）</label>
+        <input type="number" id="trade-shares" min="1" step="1" placeholder="100" oninput="calcTradePreview()" />
+      </div>
+      <div class="field">
+        <label>成交價格（元 / 股）</label>
+        <input type="number" id="trade-price" min="0.01" step="0.01" placeholder="25.50" oninput="calcTradePreview()" />
+      </div>
+    </div>
+    <div id="trade-preview" style="display:none;background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;line-height:2"></div>
+    <button class="save-btn" id="trade-save-btn" onclick="saveTransaction()" style="display:none">儲存並更新持倉</button>
+    <div class="save-ok" id="trade-ok"></div>
+  </div>
+
+  <!-- 交易紀錄 -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">交易紀錄</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span style="font-size:0.72rem;color:var(--muted)" id="trade-count"></span>
+        <span id="realized-pnl-total" style="font-size:0.8rem;font-weight:600"></span>
+      </div>
+    </div>
+    <div id="trade-list">
+      <div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">尚無交易記錄</div>
+    </div>
+  </div>
+
   <!-- 持倉現況 -->
   <div class="card">
     <div class="card-title-row">
       <div class="card-title">持倉現況</div>
       <span id="sim-tag" style="display:none;font-size:0.72rem;color:var(--orange);font-weight:600;">⚡ 模擬中</span>
     </div>
-    <div id="positions-list"></div>
+    <!-- 資產配置圓餅圖 -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:24px;padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--border)">
+    <div style="position:relative;flex-shrink:0;width:130px;height:130px">
+      <svg viewBox="0 0 100 100" style="width:100%;height:100%;transform:rotate(-90deg)" aria-hidden="true">
+        <circle cx="50" cy="50" r="35" fill="none" stroke="var(--border)" stroke-width="18"/>
+        <circle id="pie-stock" cx="50" cy="50" r="35" fill="none" stroke="var(--accent)" stroke-width="18"
+                stroke-dasharray="0 220" stroke-dashoffset="55" style="transition:stroke-dasharray .4s ease,stroke-dashoffset .4s ease"/>
+        <circle id="pie-cash"  cx="50" cy="50" r="35" fill="none" stroke="var(--green)"  stroke-width="18"
+                stroke-dasharray="0 220" stroke-dashoffset="55" style="transition:stroke-dasharray .4s ease,stroke-dashoffset .4s ease"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
+        <div id="pie-total" style="font-size:0.78rem;font-weight:700;line-height:1.3;color:var(--text)">—</div>
+        <div style="font-size:0.6rem;color:var(--muted);margin-top:1px">總資產</div>
+      </div>
+    </div>
+    <div id="pie-legend" style="flex:1;font-size:0.83rem"></div>
+  </div>
+
+  <div id="positions-list"></div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between">
       <span style="font-weight:600">總資產</span>
       <span style="font-weight:700" id="total-value">—</span>
@@ -845,6 +912,7 @@ function recalcAndRender() {
     </div>`}
   `;
 
+  renderPieChart(portfolio.stockValue, portfolio.cashTwd, portfolio.total);
   updateSettingsStats();
 
   // 頁底
@@ -923,6 +991,244 @@ function renderRecords(records) {
 }
 
 /* ════════════════════════════════════════
+   買賣交易
+════════════════════════════════════════ */
+const TRADE_KEY = "xian_transactions";
+let tradeAction = "BUY";
+
+function setTradeAction(action) {
+  tradeAction = action;
+  document.getElementById("trade-buy-btn").className  = "trade-toggle" + (action === "BUY"  ? " active-buy"  : "");
+  document.getElementById("trade-sell-btn").className = "trade-toggle" + (action === "SELL" ? " active-sell" : "");
+  calcTradePreview();
+}
+
+function calcTradePreview() {
+  const sharesInput = parseFloat(document.getElementById("trade-shares").value) || 0;
+  const priceInput  = parseFloat(document.getElementById("trade-price").value)  || 0;
+  const previewEl   = document.getElementById("trade-preview");
+  const saveBtn     = document.getElementById("trade-save-btn");
+
+  if (!sharesInput || !priceInput) {
+    previewEl.style.display = "none";
+    saveBtn.style.display   = "none";
+    return;
+  }
+
+  const currentShares = settings.shares       || 0;
+  const currentCost   = settings.costPerShare || 0;
+  const tradeAmt      = sharesInput * priceInput;
+  let html = "";
+
+  if (tradeAction === "BUY") {
+    const newShares  = currentShares + sharesInput;
+    const newAvgCost = currentCost > 0
+      ? (currentShares * currentCost + sharesInput * priceInput) / newShares
+      : priceInput;
+    const costDiff  = newAvgCost - (currentCost || newAvgCost);
+    const costSign  = costDiff >= 0 ? "+" : "";
+    html = `
+      <div class="trade-preview-row"><span class="lbl">交易金額</span><span>${fmt(tradeAmt)}</span></div>
+      <div class="trade-preview-row"><span class="lbl">買入後股數</span><span>${currentShares.toLocaleString()} → <b>${newShares.toLocaleString()}</b> 股</span></div>
+      <div class="trade-preview-row"><span class="lbl">更新均攤成本</span><span>${currentCost > 0 ? `$${currentCost.toFixed(2)} → ` : ""}
+        <b>$${newAvgCost.toFixed(2)}</b>${currentCost > 0 ? ` <span style="color:var(--muted);font-size:0.8em">(${costSign}$${Math.abs(costDiff).toFixed(2)})</span>` : ""}</span></div>`;
+  } else {
+    if (sharesInput > currentShares) {
+      previewEl.innerHTML = `<div style="color:var(--red)">⚠️ 賣出股數（${sharesInput}）超過持有（${currentShares}）</div>`;
+      previewEl.style.display = "block";
+      saveBtn.style.display   = "none";
+      return;
+    }
+    const newShares   = currentShares - sharesInput;
+    const realizedPnl = currentCost > 0 ? (priceInput - currentCost) * sharesInput : null;
+    const pnlColor    = realizedPnl === null ? "var(--muted)" : realizedPnl >= 0 ? "var(--green)" : "var(--red)";
+    const pnlSign     = realizedPnl !== null && realizedPnl >= 0 ? "+" : "";
+    html = `
+      <div class="trade-preview-row"><span class="lbl">交易金額</span><span>${fmt(tradeAmt)}</span></div>
+      <div class="trade-preview-row"><span class="lbl">賣出後股數</span><span>${currentShares.toLocaleString()} → <b>${newShares.toLocaleString()}</b> 股</span></div>
+      ${currentCost > 0
+        ? `<div class="trade-preview-row"><span class="lbl">均攤成本</span><span>$${currentCost.toFixed(2)}（保持不變）</span></div>
+           <div class="trade-preview-row"><span class="lbl"><b>已實現損益</b></span>
+             <span style="color:${pnlColor};font-weight:700">${pnlSign}${fmt(realizedPnl)}</span></div>`
+        : `<div style="color:var(--muted);font-size:0.8rem">尚無持有成本，損益計算略過</div>`}`;
+  }
+
+  previewEl.innerHTML = html;
+  previewEl.style.display = "block";
+  saveBtn.style.display   = "block";
+}
+
+function saveTransaction() {
+  const sharesInput = parseFloat(document.getElementById("trade-shares").value) || 0;
+  const priceInput  = parseFloat(document.getElementById("trade-price").value)  || 0;
+  if (!sharesInput || !priceInput) return;
+
+  const currentShares = settings.shares       || 0;
+  const currentCost   = settings.costPerShare || 0;
+
+  let newShares, newCost, realizedPnl = null;
+
+  if (tradeAction === "BUY") {
+    newShares = currentShares + sharesInput;
+    newCost   = currentCost > 0
+      ? (currentShares * currentCost + sharesInput * priceInput) / newShares
+      : priceInput;
+  } else {
+    if (sharesInput > currentShares) return;
+    newShares   = currentShares - sharesInput;
+    newCost     = currentCost;
+    realizedPnl = currentCost > 0 ? parseFloat(((priceInput - currentCost) * sharesInput).toFixed(0)) : null;
+  }
+
+  const record = {
+    id:              Date.now(),
+    datetime:        new Date().toISOString(),
+    action:          tradeAction,
+    shares:          sharesInput,
+    price:           priceInput,
+    avg_cost_before: currentCost,
+    avg_cost_after:  parseFloat(newCost.toFixed(4)),
+    shares_before:   currentShares,
+    shares_after:    newShares,
+    realized_pnl:    realizedPnl,
+  };
+
+  const data = loadTransactionData();
+  data.push(record);
+  localStorage.setItem(TRADE_KEY, JSON.stringify(data));
+
+  settings.shares       = newShares;
+  settings.costPerShare = parseFloat(newCost.toFixed(4));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  fillSettingsUI(settings);
+  recalcAndRender();
+  renderTransactions();
+
+  document.getElementById("trade-shares").value      = "";
+  document.getElementById("trade-price").value       = "";
+  document.getElementById("trade-preview").style.display  = "none";
+  document.getElementById("trade-save-btn").style.display = "none";
+
+  const ok = document.getElementById("trade-ok");
+  ok.textContent = `✅ ${tradeAction === "BUY" ? "買入" : "賣出"} ${sharesInput.toLocaleString()} 股已記錄`;
+  setTimeout(() => ok.textContent = "", 3000);
+}
+
+function loadTransactionData() {
+  try { return JSON.parse(localStorage.getItem(TRADE_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function renderTransactions() {
+  const data    = loadTransactionData();
+  const el      = document.getElementById("trade-list");
+  const countEl = document.getElementById("trade-count");
+  const totalEl = document.getElementById("realized-pnl-total");
+
+  if (!data.length) {
+    el.innerHTML       = '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">尚無交易記錄</div>';
+    countEl.textContent = "";
+    totalEl.innerHTML   = "";
+    return;
+  }
+
+  countEl.textContent = `共 ${data.length} 筆`;
+
+  const totalRealized = data.reduce((sum, r) => sum + (r.realized_pnl || 0), 0);
+  if (totalRealized !== 0) {
+    const sign  = totalRealized >= 0 ? "+" : "";
+    const color = totalRealized >= 0 ? "var(--green)" : "var(--red)";
+    totalEl.innerHTML = `已實現 <span style="color:${color};font-weight:700">${sign}${fmt(totalRealized)}</span>`;
+  } else {
+    totalEl.innerHTML = "";
+  }
+
+  const rev  = [...data].reverse();
+  let rows = "";
+  for (let i = 0; i < rev.length; i++) {
+    const r      = rev[i];
+    const isLast = i === rev.length - 1;
+    const isBuy  = r.action === "BUY";
+    const actionColor = isBuy ? "var(--green)" : "var(--red)";
+    const actionLabel = isBuy ? "買入" : "賣出";
+    const dt = new Date(r.datetime).toLocaleString("zh-TW", {
+      timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    });
+
+    let detailHtml;
+    if (isBuy) {
+      const hasPrev = r.avg_cost_before > 0;
+      detailHtml = `均攤成本 ${hasPrev ? `$${r.avg_cost_before.toFixed(2)} → ` : ""}<b>$${r.avg_cost_after.toFixed(2)}</b>`;
+    } else if (r.realized_pnl !== null) {
+      const sign  = r.realized_pnl >= 0 ? "+" : "";
+      const color = r.realized_pnl >= 0 ? "var(--green)" : "var(--red)";
+      detailHtml = `已實現損益 <span style="color:${color};font-weight:600">${sign}${fmt(r.realized_pnl)}</span>`;
+    } else {
+      detailHtml = `<span style="color:var(--muted)">（無成本資料）</span>`;
+    }
+
+    rows += `
+      <div style="padding:10px 0;${isLast ? "" : "border-bottom:1px solid var(--border)"}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-weight:700;color:${actionColor};font-size:0.88rem">${actionLabel}</span>
+              <span style="font-size:0.85rem;font-weight:600">${r.shares.toLocaleString()} 股</span>
+              <span style="color:var(--muted);font-size:0.78rem">@$${r.price.toFixed(2)}</span>
+            </div>
+            <div style="color:var(--muted);font-size:0.73rem;margin-top:3px">${dt} ｜ ${r.shares_before.toLocaleString()} → ${r.shares_after.toLocaleString()} 股</div>
+            <div style="font-size:0.75rem;margin-top:2px">${detailHtml}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-weight:700;font-size:0.9rem">${fmt(r.shares * r.price)}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = rows;
+}
+
+/* ════════════════════════════════════════
+   資產配置圓餅圖
+════════════════════════════════════════ */
+function renderPieChart(stockValue, cashValue, total) {
+  const C         = 2 * Math.PI * 35;           // 圓周長 ≈ 219.91
+  const stockPct  = total > 0 ? stockValue / total : 0;
+  const cashPct   = total > 0 ? cashValue  / total : 0;
+  const stockLen  = stockPct * C;
+  const cashLen   = cashPct  * C;
+  const startOff  = C * 0.25;                   // 從 12 點鐘方向開始
+
+  const stockEl = document.getElementById("pie-stock");
+  const cashEl  = document.getElementById("pie-cash");
+  if (stockEl) {
+    stockEl.setAttribute("stroke-dasharray",  `${stockLen.toFixed(2)} ${C.toFixed(2)}`);
+    stockEl.setAttribute("stroke-dashoffset", startOff.toFixed(2));
+  }
+  if (cashEl) {
+    cashEl.setAttribute("stroke-dasharray",  `${cashLen.toFixed(2)} ${C.toFixed(2)}`);
+    cashEl.setAttribute("stroke-dashoffset", (startOff - stockLen).toFixed(2));
+  }
+
+  const totalEl = document.getElementById("pie-total");
+  if (totalEl) totalEl.textContent = fmt(total);
+
+  const legendEl = document.getElementById("pie-legend");
+  if (!legendEl) return;
+  const mkRow = (color, label, pct, value) => `
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+      <span style="width:10px;height:10px;border-radius:2px;background:${color};flex-shrink:0;display:inline-block"></span>
+      <span style="flex:1">${label}</span>
+      <span style="font-weight:700">${(pct*100).toFixed(1)}%</span>
+    </div>
+    <div style="color:var(--muted);font-size:0.75rem;margin-left:17px;margin-bottom:10px">${fmt(value)}</div>`;
+  legendEl.innerHTML =
+    mkRow("var(--accent)", "台灣50正2", stockPct, stockValue) +
+    mkRow("var(--green)",  "現金",     cashPct,  cashValue);
+}
+
+/* ════════════════════════════════════════
    啟動
 ════════════════════════════════════════ */
 async function boot() {
@@ -932,6 +1238,7 @@ async function boot() {
   fillSettingsUI(settings);
   restoreCachedPrice();  // 先顯示快取，不讓畫面空白
   recalcAndRender();
+  renderTransactions();
   await Promise.all([fetchPrice(), loadRecords()]);
   recalcAndRender();
   // 每 60 秒自動更新報價（盤中期間有意義）
