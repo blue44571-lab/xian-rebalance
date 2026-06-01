@@ -1097,8 +1097,10 @@ function saveTransaction() {
   data.push(record);
   localStorage.setItem(TRADE_KEY, JSON.stringify(data));
 
+  const tradeAmt        = sharesInput * priceInput;
   settings.shares       = newShares;
   settings.costPerShare = parseFloat(newCost.toFixed(4));
+  settings.cashTwd      = parseFloat(((settings.cashTwd || 0) + (tradeAction === "BUY" ? -tradeAmt : tradeAmt)).toFixed(0));
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   fillSettingsUI(settings);
   recalcAndRender();
