@@ -1,37 +1,37 @@
 {
-  "last_updated": "2026-06-09T13:11:51.623139+08:00",
+  "last_updated": "2026-06-09T16:50:26.149560+08:00",
   "portfolio": {
-    "total_value": 235470.00122070312,
-    "total_stock_value": 35470.001220703125,
+    "total_value": 235439.99862670898,
+    "total_stock_value": 35439.998626708984,
     "cash_twd": 200000,
-    "cash_weight": 0.8494,
+    "cash_weight": 0.8495,
     "positions": [
       {
         "ticker": "00631L.TW",
         "name": "台灣50正2（00631L）",
         "shares": 1000,
-        "price": 35.470001220703125,
-        "value": 35470.0,
-        "weight": 0.1506,
+        "price": 35.439998626708984,
+        "value": 35440.0,
+        "weight": 0.1505,
         "beta": 2.0
       }
     ]
   },
   "rebalancing": {
     "target_alloc": 0.6,
-    "target_stock": 141282,
-    "current_stock": 35470,
-    "adjustment": 105812,
-    "shares_estimate": 2983,
+    "target_stock": 141264,
+    "current_stock": 35440,
+    "adjustment": 105824,
+    "shares_estimate": 2986,
     "action": "BUY",
     "status": "buy",
     "triggered": true,
-    "amount_twd": 105812,
-    "current_alloc": 0.1506,
-    "dev_pct": -74.89,
+    "amount_twd": 105824,
+    "current_alloc": 0.1505,
+    "dev_pct": -74.91,
     "upper": 0.66,
     "lower": 0.54,
-    "current_beta": 0.3013,
+    "current_beta": 0.3011,
     "target_beta": 1.2
   }
 }
